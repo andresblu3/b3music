@@ -14,10 +14,7 @@ createInertiaApp({
         );
 
         return page.then((module) => {
-            if (module.default && !module.default.layout) {
-                module.default.layout = Layout;
-            }
-            return module;
+            return { default: module.default, layout: module.layout || Layout };
         });
     },
     setup({ el, App, props }) {

@@ -8,6 +8,7 @@ let containerEl = null;
 let currentObjectUrl = null;
 let nativePollingInterval = null;
 let isDragging = false;
+const durationCache = new Map();
 
 // Unified reactive state
 export const playerState = $state({
@@ -18,6 +19,10 @@ export const playerState = $state({
     isLoading: false,
     hasWaveform: false,
 });
+
+export function getCachedDuration(trackId) {
+    return durationCache.get(trackId) ?? null;
+}
 
 export function setContainer(el) {
     containerEl = el;
@@ -133,6 +138,7 @@ function startNativePolling(track) {
         const nativeDuration = window.AndroidBridge.getAudioDuration();
         if (nativeDuration > 0 && playerState.duration === 0) {
             playerState.duration = nativeDuration;
+            durationCache.set(track.id, nativeDuration);
             if (!track.duration) {
                 persistDuration(track.id, Math.round(nativeDuration));
             }
@@ -146,6 +152,7 @@ function attachFallbackListeners(audio, track) {
 
     audio.addEventListener('loadedmetadata', () => {
         playerState.duration = audio.duration;
+        durationCache.set(track.id, audio.duration);
         if (!track.duration && playerState.duration > 0) {
             persistDuration(track.id, Math.round(playerState.duration));
         }

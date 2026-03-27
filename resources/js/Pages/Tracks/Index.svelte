@@ -1,5 +1,5 @@
 <script>
-    import { playTrack, playerState as player } from "../../Stores/player.svelte.js";
+    import { playTrack, playerState as player, getCachedDuration } from "../../Stores/player.svelte.js";
     import { router } from "@inertiajs/svelte";
     import { fade, fly } from "svelte/transition";
     import { flip } from "svelte/animate";
@@ -18,7 +18,7 @@
         if (track.duration) return track.duration;
         if (isCurrentTrack(track) && player.duration > 0)
             return player.duration;
-        return null;
+        return getCachedDuration(track.id);
     }
 
     function isCurrentTrack(track) {
