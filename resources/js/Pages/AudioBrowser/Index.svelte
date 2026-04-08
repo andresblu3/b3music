@@ -255,7 +255,7 @@
 
 <div class="px-6 pb-10 pt-10" in:fade={{ duration: 220 }}>
     <section
-        class="rounded-[2rem] border border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
+        class="rounded-[2rem] border border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
     >
         <div class="flex items-start justify-between gap-4">
             <div>
@@ -304,7 +304,7 @@
         >
             <div class="flex items-start gap-4">
                 <div
-                    class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.4rem] bg-purple-500/12 text-purple-300"
+                    class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.4rem] bg-blue-500/12 text-blue-300"
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"

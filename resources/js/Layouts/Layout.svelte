@@ -29,7 +29,9 @@
     let queueLength = $derived(player.queueLength);
     let queuePosition = $derived(player.queuePosition);
     let error = $derived(player.error);
-    let progressPct = $derived(duration > 0 ? Math.min(100, (progress / duration) * 100) : 0);
+    let progressPct = $derived(
+        duration > 0 ? Math.min(100, (progress / duration) * 100) : 0,
+    );
     let remainingTime = $derived(duration > 0 ? duration - progress : 0);
     let currentCoverSrc = $derived.by(() => {
         if (!currentTrack) {
@@ -37,7 +39,9 @@
         }
 
         if (currentTrack.local_cover_path) {
-            const version = currentTrack.coverVersion ? `?v=${currentTrack.coverVersion}` : "";
+            const version = currentTrack.coverVersion
+                ? `?v=${currentTrack.coverVersion}`
+                : "";
             return `/tracks/${currentTrack.id}/cover${version}`;
         }
 
@@ -109,27 +113,44 @@
         }
 
         const rect = event.currentTarget.getBoundingClientRect();
-        const fraction = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+        const fraction = Math.max(
+            0,
+            Math.min(1, (event.clientX - rect.left) / rect.width),
+        );
         seek(fraction * duration);
     }
 </script>
 
-<div class="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.1),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.06),transparent_25%),#050505] text-gray-100 selection:bg-purple-500/25 font-instrument-sans">
-    <main class="min-h-screen overflow-y-auto pb-56 pt-[max(env(safe-area-inset-top),1rem)]">
+<div
+    class="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(255,255,255,0.06),transparent_25%),#050505] text-gray-100 selection:bg-blue-500/25 font-instrument-sans"
+>
+    <main
+        class="min-h-screen overflow-y-auto pb-56 pt-[max(env(safe-area-inset-top),1rem)]"
+    >
         {@render children()}
     </main>
 
     <div
         class="fixed inset-x-0 bottom-0 z-50 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]"
-        style="transform: translateY({currentTrack ? '0' : '120%'}); opacity: {currentTrack ? '1' : '0'}; pointer-events: {currentTrack ? 'auto' : 'none'};"
+        style="transform: translateY({currentTrack
+            ? '0'
+            : '120%'}); opacity: {currentTrack
+            ? '1'
+            : '0'}; pointer-events: {currentTrack ? 'auto' : 'none'};"
         aria-hidden={!currentTrack}
     >
         {#if isPlaying}
-            <div class="absolute inset-x-5 -bottom-4 h-20 rounded-[2rem] bg-purple-500/8 blur-3xl"></div>
+            <div
+                class="absolute inset-x-5 -bottom-4 h-20 rounded-[2rem] bg-blue-500/8 blur-3xl"
+            ></div>
         {/if}
 
-        <div class="relative mx-auto max-w-md overflow-hidden rounded-[2rem] border border-white/8 bg-black/70 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-            <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+        <div
+            class="relative mx-auto max-w-md overflow-hidden rounded-[2rem] border border-white/8 bg-black/70 shadow-[0_24px_80px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+        >
+            <div
+                class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"
+            ></div>
 
             <div class="px-4 pt-4">
                 <button
@@ -139,7 +160,11 @@
                 >
                     <div
                         class="relative h-14 w-14 shrink-0 overflow-hidden rounded-[1.2rem] bg-[linear-gradient(145deg,#1f1f1f,#090909)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.08)]"
-                        style="animation: {isPlaying && currentCoverSrc ? 'spin 20s linear infinite' : 'none'}; border-radius: {currentCoverSrc ? '9999px' : '1rem'};"
+                        style="animation: {isPlaying && currentCoverSrc
+                            ? 'spin 20s linear infinite'
+                            : 'none'}; border-radius: {currentCoverSrc
+                            ? '9999px'
+                            : '1rem'};"
                     >
                         {#if currentCoverSrc}
                             <img
@@ -148,7 +173,9 @@
                                 class="h-full w-full object-cover"
                             />
                         {:else}
-                            <div class="flex h-full w-full items-center justify-center text-white/20">
+                            <div
+                                class="flex h-full w-full items-center justify-center text-white/20"
+                            >
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
                                     class="h-6 w-6"
@@ -167,12 +194,16 @@
 
                     <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-2">
-                            <p class="truncate text-sm font-semibold tracking-tight text-white">
+                            <p
+                                class="truncate text-sm font-semibold tracking-tight text-white"
+                            >
                                 {currentTrack?.title || ""}
                             </p>
 
                             {#if queueLength > 1}
-                                <span class="rounded-full bg-white/8 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+                                <span
+                                    class="rounded-full bg-white/8 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55"
+                                >
                                     {queuePosition}/{queueLength}
                                 </span>
                             {/if}
@@ -181,38 +212,54 @@
                         <p class="mt-1 truncate text-[11px] text-white/45">
                             {currentTrack?.artist || "Artista desconocido"}
                             {#if currentTrack?.album}
-                                <span class="text-white/22"> • {currentTrack.album}</span>
+                                <span class="text-white/22">
+                                    • {currentTrack.album}</span
+                                >
                             {/if}
                         </p>
 
                         <div class="mt-2 flex flex-wrap items-center gap-2">
                             {#if isLoading}
-                                <span class="rounded-full bg-white/7 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+                                <span
+                                    class="rounded-full bg-white/7 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55"
+                                >
                                     Cargando
                                 </span>
                             {:else if error}
-                                <span class="rounded-full bg-rose-500/14 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-rose-200">
+                                <span
+                                    class="rounded-full bg-rose-500/14 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-rose-200"
+                                >
                                     Error
                                 </span>
                             {:else if isPlaying}
-                                <span class="rounded-full bg-purple-500/16 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-purple-200">
+                                <span
+                                    class="rounded-full bg-blue-500/16 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-blue-200"
+                                >
                                     En reproducción
                                 </span>
                             {:else}
-                                <span class="rounded-full bg-white/7 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+                                <span
+                                    class="rounded-full bg-white/7 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55"
+                                >
                                     Pausado
                                 </span>
                             {/if}
 
                             {#if shuffle}
-                                <span class="rounded-full bg-white/7 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
+                                <span
+                                    class="rounded-full bg-white/7 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55"
+                                >
                                     Shuffle
                                 </span>
                             {/if}
 
                             {#if repeat !== "off"}
-                                <span class="rounded-full bg-white/7 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55">
-                                    {repeat === "one" ? "Repite una" : "Repite todo"}
+                                <span
+                                    class="rounded-full bg-white/7 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55"
+                                >
+                                    {repeat === "one"
+                                        ? "Repite una"
+                                        : "Repite todo"}
                                 </span>
                             {/if}
                         </div>
@@ -248,13 +295,13 @@
                         onpointercancel={endDrag}
                     >
                         <div
-                            class="h-full rounded-full bg-gradient-to-r from-purple-600 to-purple-300"
+                            class="h-full rounded-full bg-gradient-to-r from-blue-600 to-sky-400"
                             class:transition-[width]={!dragging}
                             class:duration-100={!dragging}
                             style="width: {progressPct}%"
                         ></div>
                         <div
-                            class="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-[0_0_12px_rgba(168,85,247,0.6)]"
+                            class="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-[0_0_12px_rgba(59,130,246,0.6)]"
                             class:transition-[left]={!dragging}
                             class:duration-100={!dragging}
                             style="left: calc({progressPct}% - 8px)"
@@ -270,20 +317,28 @@
                 {/if}
 
                 {#if isLoading}
-                    <div class="absolute inset-0 flex items-center justify-center">
-                        <div class="h-5 w-5 animate-spin rounded-full border-2 border-purple-400 border-t-transparent"></div>
+                    <div
+                        class="absolute inset-0 flex items-center justify-center"
+                    >
+                        <div
+                            class="h-5 w-5 animate-spin rounded-full border-2 border-blue-400 border-t-transparent"
+                        ></div>
                     </div>
                 {/if}
             </div>
 
-            <div class="flex items-center justify-between px-4 pt-2 text-[10px] font-medium text-white/38">
+            <div
+                class="flex items-center justify-between px-4 pt-2 text-[10px] font-medium text-white/38"
+            >
                 <span>{formatTime(progress)}</span>
                 <span>-{formatTime(remainingTime)}</span>
             </div>
 
             {#if error}
                 <div class="px-4 pt-2">
-                    <div class="rounded-[1rem] border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-xs text-rose-100/85">
+                    <div
+                        class="rounded-[1rem] border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-xs text-rose-100/85"
+                    >
                         {error}
                     </div>
                 </div>
@@ -293,7 +348,7 @@
                 <button
                     type="button"
                     class={`relative flex h-9 w-9 items-center justify-center transition-colors ${
-                        shuffle ? "text-purple-300" : "text-white/35"
+                        shuffle ? "text-blue-300" : "text-white/35"
                     }`}
                     onclick={toggleShuffle}
                     aria-label="Alternar modo aleatorio"
@@ -313,7 +368,9 @@
                         />
                     </svg>
                     {#if shuffle}
-                        <span class="absolute -bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-purple-300"></span>
+                        <span
+                            class="absolute -bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-blue-300"
+                        ></span>
                     {/if}
                 </button>
 
@@ -342,7 +399,9 @@
                     aria-label="Reproducir o pausar"
                 >
                     {#if isPlaying}
-                        <div class="absolute inset-0 rounded-full ring-2 ring-purple-400/20"></div>
+                        <div
+                            class="absolute inset-0 rounded-full ring-2 ring-blue-400/20"
+                        ></div>
                     {/if}
 
                     {#if isPlaying}
@@ -395,7 +454,7 @@
                 <button
                     type="button"
                     class={`relative flex h-9 w-9 items-center justify-center transition-colors ${
-                        repeat !== "off" ? "text-purple-300" : "text-white/35"
+                        repeat !== "off" ? "text-blue-300" : "text-white/35"
                     }`}
                     onclick={toggleRepeat}
                     aria-label="Alternar modo repetir"
@@ -415,7 +474,10 @@
                         />
                     </svg>
                     {#if repeat === "one"}
-                        <span class="absolute -top-1 -right-0.5 text-[8px] font-black text-purple-300">1</span>
+                        <span
+                            class="absolute -top-1 -right-0.5 text-[8px] font-black text-blue-300"
+                            >1</span
+                        >
                     {/if}
                 </button>
             </div>
@@ -433,9 +495,13 @@
                 }
             }}
         >
-            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(168,85,247,0.24),transparent_32%)]"></div>
+            <div
+                class="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(37,99,235,0.26),transparent_32%)]"
+            ></div>
 
-            <div class="relative mx-auto flex h-full max-w-md flex-col px-6 pb-[max(env(safe-area-inset-bottom),1.5rem)] pt-[max(env(safe-area-inset-top),1.5rem)]">
+            <div
+                class="relative mx-auto flex h-full max-w-md flex-col px-6 pb-[max(env(safe-area-inset-bottom),1.5rem)] pt-[max(env(safe-area-inset-top),1.5rem)]"
+            >
                 <div class="flex items-center justify-between">
                     <button
                         type="button"
@@ -462,21 +528,25 @@
                         class="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/6 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/70"
                         onclick={destroyPlayer}
                     >
-                        Cerrar sesión
+                        Detener
                     </button>
                 </div>
 
                 <div class="flex flex-1 flex-col justify-center">
                     <div class="mx-auto w-full max-w-sm">
-                        <div class="relative mx-auto aspect-square w-full overflow-hidden rounded-[2.5rem] bg-[linear-gradient(145deg,#1b1b1b,#090909)] shadow-[0_24px_80px_rgba(0,0,0,0.35)]">
+                        <div
+                            class="relative mx-auto aspect-square w-full overflow-hidden rounded-[2.5rem] bg-[linear-gradient(145deg,#1b1b1b,#090909)] shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
+                        >
                             {#if currentCoverSrc}
                                 <img
                                     src={currentCoverSrc}
                                     alt={`Portada de ${currentTrack.title}`}
-                                    class={`h-full w-full object-cover ${isPlaying ? "animate-[spin_18s_linear_infinite]" : ""}`}
+                                    class={`h-full w-full object-cover`}
                                 />
                             {:else}
-                                <div class="flex h-full w-full items-center justify-center text-white/18">
+                                <div
+                                    class="flex h-full w-full items-center justify-center text-white/18"
+                                >
                                     <svg
                                         xmlns="http://www.w3.org/2000/svg"
                                         class="h-20 w-20"
@@ -494,14 +564,18 @@
                         </div>
 
                         <div class="mt-8 text-center">
-                            <p class="text-3xl font-black tracking-[-0.04em] text-white">
+                            <p
+                                class="text-3xl font-black tracking-[-0.04em] text-white"
+                            >
                                 {currentTrack.title}
                             </p>
                             <p class="mt-2 text-base text-white/55">
                                 {currentTrack.artist || "Artista desconocido"}
                             </p>
                             {#if currentTrack.album}
-                                <p class="mt-1 text-sm uppercase tracking-[0.18em] text-white/25">
+                                <p
+                                    class="mt-1 text-sm uppercase tracking-[0.18em] text-white/25"
+                                >
                                     {currentTrack.album}
                                 </p>
                             {/if}
@@ -517,30 +591,34 @@
                                 onpointercancel={endDrag}
                             >
                                 <div
-                                    class="h-full rounded-full bg-gradient-to-r from-purple-600 to-purple-300"
+                                    class="h-full rounded-full bg-gradient-to-r from-blue-600 to-sky-400"
                                     class:transition-[width]={!dragging}
                                     class:duration-100={!dragging}
                                     style="width: {progressPct}%"
                                 ></div>
                                 <div
-                                    class="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-[0_0_14px_rgba(168,85,247,0.7)]"
+                                    class="absolute top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-white shadow-[0_0_14px_rgba(59,130,246,0.7)]"
                                     class:transition-[left]={!dragging}
                                     class:duration-100={!dragging}
                                     style="left: calc({progressPct}% - 8px)"
                                 ></div>
                             </div>
 
-                            <div class="mt-3 flex items-center justify-between text-xs font-medium text-white/38">
+                            <div
+                                class="mt-3 flex items-center justify-between text-xs font-medium text-white/38"
+                            >
                                 <span>{formatTime(progress)}</span>
                                 <span>-{formatTime(remainingTime)}</span>
                             </div>
                         </div>
 
-                        <div class="mt-8 flex items-center justify-center gap-8">
+                        <div
+                            class="mt-8 flex items-center justify-center gap-8"
+                        >
                             <button
                                 type="button"
                                 class={`relative flex h-11 w-11 items-center justify-center transition-colors ${
-                                    shuffle ? "text-purple-300" : "text-white/35"
+                                    shuffle ? "text-blue-300" : "text-white/35"
                                 }`}
                                 onclick={toggleShuffle}
                                 aria-label="Alternar aleatorio"
@@ -635,7 +713,9 @@
                             <button
                                 type="button"
                                 class={`relative flex h-11 w-11 items-center justify-center transition-colors ${
-                                    repeat !== "off" ? "text-purple-300" : "text-white/35"
+                                    repeat !== "off"
+                                        ? "text-blue-300"
+                                        : "text-white/35"
                                 }`}
                                 onclick={toggleRepeat}
                                 aria-label="Alternar repetición"
@@ -655,7 +735,10 @@
                                     />
                                 </svg>
                                 {#if repeat === "one"}
-                                    <span class="absolute -top-1 -right-0.5 text-[9px] font-black text-purple-300">1</span>
+                                    <span
+                                        class="absolute -top-1 -right-0.5 text-[9px] font-black text-blue-300"
+                                        >1</span
+                                    >
                                 {/if}
                             </button>
                         </div>
@@ -666,12 +749,19 @@
     {/if}
 
     {#if toastState.visible}
-        <div class="fixed left-1/2 bottom-52 z-[75] -translate-x-1/2" transition:fly={{ y: 20, duration: 220 }}>
-            <div class="flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-5 py-2.5 shadow-xl backdrop-blur-xl">
+        <div
+            class="fixed left-1/2 bottom-52 z-[75] -translate-x-1/2"
+            transition:fly={{ y: 20, duration: 220 }}
+        >
+            <div
+                class="flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-5 py-2.5 shadow-xl backdrop-blur-xl"
+            >
                 {#if toastState.icon}
                     <span class="text-sm">{toastState.icon}</span>
                 {/if}
-                <span class="whitespace-nowrap text-sm font-medium text-white/90">
+                <span
+                    class="whitespace-nowrap text-sm font-medium text-white/90"
+                >
                     {toastState.message}
                 </span>
             </div>

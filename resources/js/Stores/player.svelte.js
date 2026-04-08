@@ -343,7 +343,7 @@ export function playTrack(track) {
                     container: containerEl,
                     url: currentObjectUrl,
                     waveColor: 'rgba(255, 255, 255, 0.15)',
-                    progressColor: '#a855f7',
+                    progressColor: '#3b82f6',
                     cursorColor: 'transparent',
                     barWidth: 2,
                     barGap: 1,

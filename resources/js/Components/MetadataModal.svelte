@@ -35,6 +35,12 @@
             draftArtist.trim().length > 0,
     );
 
+    let footerMessage = $derived(
+        selectedResult
+            ? "Revisa los campos y aplica cuando estén listos. El botón permanece visible aunque el contenido haga scroll."
+            : "Puedes editar manualmente y aplicar los cambios sin depender de un resultado sugerido.",
+    );
+
     $effect(() => {
         if (show && track) {
             untrack(() => {
@@ -142,8 +148,8 @@
         }
     }
 
-    function close() {
-        if (applying) {
+    function close(force = false) {
+        if (applying && !force) {
             return;
         }
 
@@ -210,9 +216,10 @@
 
             showToast("Metadatos actualizados");
             onApplied?.(updatedTrack);
-            close();
+            close(true);
         } catch {
             showToast("Error al aplicar metadatos.");
+        } finally {
             applying = false;
         }
     }
@@ -232,11 +239,13 @@
         }}
     >
         <div
-            class="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#101010] shadow-[0_30px_90px_rgba(0,0,0,0.55)]"
+            class="flex max-h-[92vh] w-full max-w-3xl min-h-0 flex-col overflow-hidden rounded-[2rem] border border-white/10 bg-[#101010] shadow-[0_30px_90px_rgba(0,0,0,0.55)]"
             in:scale={{ start: 0.97, duration: 180 }}
             out:scale={{ start: 1, end: 0.98, duration: 120 }}
         >
-            <div class="border-b border-white/6 px-5 pb-4 pt-5 sm:px-6">
+            <div
+                class="shrink-0 border-b border-white/6 px-5 pb-4 pt-5 sm:px-6"
+            >
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <p
@@ -316,17 +325,17 @@
 
                             <div class="min-w-0">
                                 <p
-                                    class="truncate text-base font-semibold text-white max-w-[200px]"
+                                    class="max-w-[200px] truncate text-base font-semibold text-white"
                                 >
                                     {track.title}
                                 </p>
                                 <p
-                                    class="mt-1 truncate text-sm text-white/45 max-w-[200px]"
+                                    class="mt-1 max-w-[200px] truncate text-sm text-white/45"
                                 >
                                     {track.artist || "Artista desconocido"}
                                 </p>
                                 <p
-                                    class="mt-1 truncate text-xs uppercase tracking-[0.16em] text-white/25 max-w-[200px]"
+                                    class="mt-1 max-w-[200px] truncate text-xs uppercase tracking-[0.16em] text-white/25"
                                 >
                                     {track.album || "Sin álbum"}
                                 </p>
@@ -335,7 +344,7 @@
                     </div>
 
                     <div
-                        class="rounded-[1.5rem] border border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.16),transparent_45%),rgba(255,255,255,0.04)] p-4"
+                        class="rounded-[1.5rem] border border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_45%),rgba(255,255,255,0.04)] p-4"
                     >
                         <p
                             class="text-[11px] font-semibold uppercase tracking-[0.28em] text-white/35"
@@ -377,17 +386,17 @@
 
                             <div class="min-w-0">
                                 <p
-                                    class="truncate text-base font-semibold text-white max-w-[200px]"
+                                    class="max-w-[200px] truncate text-base font-semibold text-white"
                                 >
                                     {draftTitle || "Sin título"}
                                 </p>
                                 <p
-                                    class="mt-1 truncate text-sm text-white/45 max-w-[200px]"
+                                    class="mt-1 max-w-[200px] truncate text-sm text-white/45"
                                 >
                                     {draftArtist || "Artista desconocido"}
                                 </p>
                                 <p
-                                    class="mt-1 truncate text-xs uppercase tracking-[0.16em] text-white/25 max-w-[200px]"
+                                    class="mt-1 max-w-[200px] truncate text-xs uppercase tracking-[0.16em] text-white/25"
                                 >
                                     {draftAlbum || "Sin álbum"}
                                 </p>
@@ -403,7 +412,7 @@
                             bind:value={query}
                             onkeydown={handleKeydown}
                             placeholder="Busca en iTunes por título, artista o álbum..."
-                            class="w-full rounded-[1.35rem] border border-white/10 bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/28 outline-none transition-colors focus:border-white/20"
+                            class="w-full rounded-[1.35rem] border border-white/10 bg-white/[0.03] py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/28 outline-none transition-colors focus:border-blue-400/45"
                         />
 
                         <div
@@ -428,14 +437,14 @@
 
                     <button
                         type="button"
-                        class="inline-flex items-center justify-center rounded-[1.35rem] bg-white px-5 py-3 text-sm font-semibold text-black transition-transform active:scale-[0.98] disabled:opacity-65"
+                        class="inline-flex items-center justify-center rounded-[1.35rem] bg-blue-500 px-5 py-3 text-sm font-semibold text-white transition-colors active:scale-[0.98] hover:bg-blue-400 disabled:opacity-65"
                         onclick={search}
                         disabled={loading || applying || !query.trim()}
                     >
                         {#if loading}
                             <span class="inline-flex items-center gap-2">
                                 <span
-                                    class="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black"
+                                    class="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-white"
                                 ></span>
                                 Buscando...
                             </span>
@@ -446,239 +455,254 @@
                 </div>
             </div>
 
-            <div
-                class="grid flex-1 gap-0 overflow-hidden lg:grid-cols-[1.05fr_0.95fr]"
-            >
-                <div class="border-b border-white/6 lg:border-b-0 lg:border-r">
+            <div class="min-h-0 flex-1 overflow-y-auto">
+                <div class="grid min-h-full gap-0 lg:grid-cols-[1.05fr_0.95fr]">
                     <div
-                        class="flex items-center justify-between px-5 pb-3 pt-4 sm:px-6"
+                        class="border-b border-white/6 lg:border-b-0 lg:border-r"
                     >
-                        <p class="text-sm font-semibold text-white/70">
-                            Resultados sugeridos
-                        </p>
-                        <p class="text-xs text-white/35">
-                            {results.length} coincidencias
-                        </p>
-                    </div>
+                        <div
+                            class="flex items-center justify-between px-5 pb-3 pt-4 sm:px-6"
+                        >
+                            <p class="text-sm font-semibold text-white/70">
+                                Resultados sugeridos
+                            </p>
+                            <p class="text-xs text-white/35">
+                                {results.length} coincidencias
+                            </p>
+                        </div>
 
-                    <div class="h-[300px] overflow-y-auto px-3 pb-4 sm:px-4">
-                        {#if loading}
-                            <div class="flex flex-col gap-2 p-2">
-                                {#each Array(4) as _}
-                                    <div
-                                        class="flex animate-pulse rounded-[1.25rem] bg-white/[0.04] p-3"
-                                    >
+                        <div class="px-3 pb-4 sm:px-4">
+                            {#if loading}
+                                <div
+                                    class="flex min-h-[15rem] flex-col gap-2 p-2"
+                                >
+                                    {#each Array(4) as _}
                                         <div
-                                            class="h-14 w-14 rounded-xl bg-white/10"
-                                        ></div>
-                                        <div
-                                            class="ml-4 flex flex-1 flex-col justify-center gap-2"
+                                            class="flex animate-pulse rounded-[1.25rem] bg-white/[0.04] p-3"
                                         >
                                             <div
-                                                class="h-4 w-3/4 rounded bg-white/10"
+                                                class="h-14 w-14 rounded-xl bg-white/10"
                                             ></div>
                                             <div
-                                                class="h-3 w-1/2 rounded bg-white/5"
-                                            ></div>
+                                                class="ml-4 flex flex-1 flex-col justify-center gap-2"
+                                            >
+                                                <div
+                                                    class="h-4 w-3/4 rounded bg-white/10"
+                                                ></div>
+                                                <div
+                                                    class="h-3 w-1/2 rounded bg-white/5"
+                                                ></div>
+                                            </div>
                                         </div>
-                                    </div>
-                                {/each}
-                            </div>
-                        {:else if error}
-                            <div
-                                class="flex h-full flex-col items-center justify-center px-8 text-center"
-                            >
+                                    {/each}
+                                </div>
+                            {:else if error}
                                 <div
-                                    class="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/6 text-white/20"
+                                    class="flex min-h-[15rem] flex-col items-center justify-center px-8 text-center"
+                                >
+                                    <div
+                                        class="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-white/6 text-white/20"
+                                    >
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            class="h-7 w-7"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            stroke-width="1.8"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                            />
+                                        </svg>
+                                    </div>
+                                    <p class="text-sm text-white/55">{error}</p>
+                                </div>
+                            {:else if results.length > 0}
+                                <div class="flex flex-col gap-2">
+                                    {#each results as result, index}
+                                        <button
+                                            type="button"
+                                            class={`flex w-full items-center gap-4 rounded-[1.25rem] border px-3 py-3 text-left transition-colors ${
+                                                selectedResult === result
+                                                    ? "border-blue-400/35 bg-blue-500/10"
+                                                    : "border-transparent bg-white/[0.03] hover:bg-white/[0.06]"
+                                            }`}
+                                            onclick={() => selectResult(result)}
+                                        >
+                                            <div
+                                                class="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-white/8"
+                                            >
+                                                {#if result.cover_url}
+                                                    <img
+                                                        src={result.cover_url}
+                                                        alt={`Portada de ${result.title}`}
+                                                        class="h-full w-full object-cover"
+                                                    />
+                                                {/if}
+                                            </div>
+
+                                            <div class="min-w-0 flex-1">
+                                                <div
+                                                    class="flex items-center gap-2"
+                                                >
+                                                    <p
+                                                        class="truncate text-sm font-semibold text-white"
+                                                    >
+                                                        {result.title}
+                                                    </p>
+
+                                                    {#if index === 0}
+                                                        <span
+                                                            class="rounded-full bg-white/8 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/55"
+                                                        >
+                                                            Mejor opción
+                                                        </span>
+                                                    {/if}
+                                                </div>
+
+                                                <p
+                                                    class="mt-1 truncate text-xs text-white/45"
+                                                >
+                                                    {result.artist}
+                                                </p>
+                                                <p
+                                                    class="mt-1 truncate text-[11px] uppercase tracking-[0.16em] text-white/22"
+                                                >
+                                                    {result.album ||
+                                                        "Sin álbum"}
+                                                </p>
+                                            </div>
+                                        </button>
+                                    {/each}
+                                </div>
+                            {:else}
+                                <div
+                                    class="flex min-h-[15rem] flex-col items-center justify-center px-8 text-center text-white/40"
                                 >
                                     <svg
                                         xmlns="http://www.w3.org/2000/svg"
-                                        class="h-7 w-7"
+                                        class="mb-4 h-10 w-10 opacity-20"
                                         fill="none"
                                         viewBox="0 0 24 24"
                                         stroke="currentColor"
-                                        stroke-width="1.8"
+                                        stroke-width="1.5"
                                     >
                                         <path
                                             stroke-linecap="round"
                                             stroke-linejoin="round"
-                                            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                                         />
                                     </svg>
+                                    <p class="text-sm">
+                                        Busca en iTunes para traer coincidencias
+                                        y revisar antes de guardar.
+                                    </p>
                                 </div>
-                                <p class="text-sm text-white/55">{error}</p>
-                            </div>
-                        {:else if results.length > 0}
-                            <div class="flex flex-col gap-2">
-                                {#each results as result, index}
-                                    <button
-                                        type="button"
-                                        class={`flex w-full items-center gap-4 rounded-[1.25rem] border px-3 py-3 text-left transition-colors ${
-                                            selectedResult === result
-                                                ? "border-white/14 bg-white/[0.08]"
-                                                : "border-transparent bg-white/[0.03] hover:bg-white/[0.06]"
-                                        }`}
-                                        onclick={() => selectResult(result)}
-                                    >
-                                        <div
-                                            class="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-white/8"
-                                        >
-                                            {#if result.cover_url}
-                                                <img
-                                                    src={result.cover_url}
-                                                    alt={`Portada de ${result.title}`}
-                                                    class="h-full w-full object-cover"
-                                                />
-                                            {/if}
-                                        </div>
+                            {/if}
+                        </div>
+                    </div>
 
-                                        <div class="min-w-0 flex-1">
-                                            <div
-                                                class="flex items-center gap-2"
-                                            >
-                                                <p
-                                                    class="truncate text-sm font-semibold text-white"
-                                                >
-                                                    {result.title}
-                                                </p>
+                    <div class="flex min-h-0 flex-col">
+                        <div
+                            class="border-b border-white/6 px-5 pb-3 pt-4 sm:px-6"
+                        >
+                            <p class="text-sm font-semibold text-white/70">
+                                Edición final
+                            </p>
+                            <p class="mt-1 text-xs text-white/35">
+                                Puedes ajustar los campos antes de aplicar. La
+                                portada seleccionada se intentará guardar
+                                localmente.
+                            </p>
+                        </div>
 
-                                                {#if index === 0}
-                                                    <span
-                                                        class="rounded-full bg-white/8 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.15em] text-white/55"
-                                                    >
-                                                        Mejor opción
-                                                    </span>
-                                                {/if}
-                                            </div>
-
-                                            <p
-                                                class="mt-1 truncate text-xs text-white/45"
-                                            >
-                                                {result.artist}
-                                            </p>
-                                            <p
-                                                class="mt-1 truncate text-[11px] uppercase tracking-[0.16em] text-white/22"
-                                            >
-                                                {result.album || "Sin álbum"}
-                                            </p>
-                                        </div>
-                                    </button>
-                                {/each}
-                            </div>
-                        {:else}
-                            <div
-                                class="flex h-full flex-col items-center justify-center px-8 text-center text-white/40"
-                            >
-                                <svg
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    class="mb-4 h-10 w-10 opacity-20"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                    stroke-width="1.5"
+                        <div class="space-y-4 px-5 py-4 sm:px-6">
+                            <label class="block">
+                                <span
+                                    class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/35"
                                 >
-                                    <path
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                        d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                                    />
-                                </svg>
-                                <p class="text-sm">
-                                    Busca en iTunes para traer coincidencias y
-                                    revisar antes de guardar.
-                                </p>
-                            </div>
-                        {/if}
+                                    Título
+                                </span>
+                                <input
+                                    type="text"
+                                    bind:value={draftTitle}
+                                    class="w-full rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-blue-400/45"
+                                />
+                            </label>
+
+                            <label class="block">
+                                <span
+                                    class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/35"
+                                >
+                                    Artista
+                                </span>
+                                <input
+                                    type="text"
+                                    bind:value={draftArtist}
+                                    class="w-full rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-blue-400/45"
+                                />
+                            </label>
+
+                            <label class="block">
+                                <span
+                                    class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/35"
+                                >
+                                    Álbum
+                                </span>
+                                <input
+                                    type="text"
+                                    bind:value={draftAlbum}
+                                    class="w-full rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-blue-400/45"
+                                />
+                            </label>
+
+                            <label class="block">
+                                <span
+                                    class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/35"
+                                >
+                                    URL de portada
+                                </span>
+                                <input
+                                    type="url"
+                                    bind:value={draftCoverUrl}
+                                    class="w-full rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-blue-400/45"
+                                />
+                            </label>
+                        </div>
                     </div>
                 </div>
+            </div>
 
-                <div class="flex flex-col">
-                    <div class="border-b border-white/6 px-5 pb-3 pt-4 sm:px-6">
-                        <p class="text-sm font-semibold text-white/70">
-                            Edición final
-                        </p>
-                        <p class="mt-1 text-xs text-white/35">
-                            Puedes ajustar los campos antes de aplicar. La
-                            portada seleccionada se intentará guardar
-                            localmente.
-                        </p>
-                    </div>
+            <div
+                class="shrink-0 border-t border-white/6 bg-black/45 px-5 py-4 backdrop-blur-xl sm:px-6 sm:py-5"
+            >
+                <div
+                    class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                    <p class="text-xs leading-relaxed text-white/42">
+                        {footerMessage}
+                    </p>
 
-                    <div
-                        class="flex-1 space-y-4 overflow-y-auto px-5 py-4 sm:px-6"
+                    <button
+                        type="button"
+                        class="inline-flex w-full shrink-0 items-center justify-center rounded-[1.25rem] bg-blue-500 px-5 py-3.5 text-sm font-semibold text-white transition-colors active:scale-[0.98] hover:bg-blue-400 disabled:opacity-65 sm:w-auto sm:min-w-[14rem]"
+                        onclick={applyDraft}
+                        disabled={!canApply}
                     >
-                        <label class="block">
-                            <span
-                                class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/35"
-                            >
-                                Título
+                        {#if applying}
+                            <span class="inline-flex items-center gap-2">
+                                <span
+                                    class="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-white"
+                                ></span>
+                                Guardando metadata...
                             </span>
-                            <input
-                                type="text"
-                                bind:value={draftTitle}
-                                class="w-full rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-white/20"
-                            />
-                        </label>
-
-                        <label class="block">
-                            <span
-                                class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/35"
-                            >
-                                Artista
-                            </span>
-                            <input
-                                type="text"
-                                bind:value={draftArtist}
-                                class="w-full rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-white/20"
-                            />
-                        </label>
-
-                        <label class="block">
-                            <span
-                                class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/35"
-                            >
-                                Álbum
-                            </span>
-                            <input
-                                type="text"
-                                bind:value={draftAlbum}
-                                class="w-full rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-white/20"
-                            />
-                        </label>
-
-                        <label class="block">
-                            <span
-                                class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-white/35"
-                            >
-                                URL de portada
-                            </span>
-                            <input
-                                type="url"
-                                bind:value={draftCoverUrl}
-                                class="w-full rounded-[1.15rem] border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white outline-none transition-colors focus:border-white/20"
-                            />
-                        </label>
-                    </div>
-
-                    <div class="border-t border-white/6 p-4 sm:p-5">
-                        <button
-                            type="button"
-                            class="inline-flex w-full items-center justify-center rounded-[1.25rem] bg-white px-5 py-3.5 text-sm font-semibold text-black transition-transform active:scale-[0.98] disabled:opacity-65"
-                            onclick={applyDraft}
-                            disabled={!canApply}
-                        >
-                            {#if applying}
-                                <span class="inline-flex items-center gap-2">
-                                    <span
-                                        class="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black"
-                                    ></span>
-                                    Guardando metadata...
-                                </span>
-                            {:else}
-                                Aplicar cambios
-                            {/if}
-                        </button>
-                    </div>
+                        {:else}
+                            Aplicar cambios
+                        {/if}
+                    </button>
                 </div>
             </div>
         </div>

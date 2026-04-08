@@ -26,6 +26,7 @@
     let deleteCandidate = $state(null);
     let showMetadataModal = $state(false);
     let selectedTrackForMetadata = $state(null);
+    let openMenuTrackId = $state(null);
     let coverVersions = $state({});
 
     let libraryStats = $derived.by(() => {
@@ -103,6 +104,7 @@
     }
 
     function openMetadata(track) {
+        openMenuTrackId = null;
         selectedTrackForMetadata = track;
         showMetadataModal = true;
     }
@@ -161,7 +163,16 @@
     }
 
     function requestDelete(track) {
+        openMenuTrackId = null;
         deleteCandidate = track;
+    }
+
+    function toggleTrackMenu(trackId) {
+        openMenuTrackId = openMenuTrackId === trackId ? null : trackId;
+    }
+
+    function closeTrackMenu() {
+        openMenuTrackId = null;
     }
 
     function closeDeleteDialog() {
@@ -205,13 +216,32 @@
             return;
         }
 
+        closeTrackMenu();
         setQueue(visibleTracks, index);
     }
+
+    $effect(() => {
+        if (!openMenuTrackId) {
+            return;
+        }
+
+        const handleKeydown = (event) => {
+            if (event.key === "Escape") {
+                closeTrackMenu();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeydown);
+
+        return () => {
+            window.removeEventListener("keydown", handleKeydown);
+        };
+    });
 </script>
 
 <div class="px-6 pb-10 pt-10">
     <section
-        class="relative overflow-hidden rounded-[2rem] border border-white/8 bg-[radial-gradient(circle_at_top_left,_rgba(168,85,247,0.22),_transparent_42%),linear-gradient(135deg,_rgba(255,255,255,0.08),_rgba(255,255,255,0.02))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
+        class="relative overflow-hidden rounded-[2rem] border border-white/8 bg-[radial-gradient(circle_at_top_left,_rgba(37,99,235,0.22),_transparent_42%),linear-gradient(135deg,_rgba(255,255,255,0.08),_rgba(255,255,255,0.02))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
         in:fade={{ duration: 280 }}
     >
         <div
@@ -351,7 +381,7 @@
             in:fade={{ duration: 500 }}
         >
             <div
-                class="mb-6 flex h-24 w-24 items-center justify-center rounded-[2rem] bg-[radial-gradient(circle_at_30%_20%,rgba(168,85,247,0.25),transparent_55%),rgba(255,255,255,0.04)] text-white/55"
+                class="mb-6 flex h-24 w-24 items-center justify-center rounded-[2rem] bg-[radial-gradient(circle_at_30%_20%,rgba(37,99,235,0.24),transparent_55%),rgba(255,255,255,0.04)] text-white/55"
             >
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
@@ -401,7 +431,7 @@
         <div class="mt-8 flex flex-col gap-3">
             {#each visibleTracks as track (track.id)}
                 <article
-                    class={`group overflow-hidden rounded-[1.75rem] border transition-all duration-300 ${
+                    class={`group relative overflow-visible rounded-[1.75rem] border transition-all duration-300 ${
                         isCurrentTrack(track)
                             ? "border-white/12 bg-white/[0.08] shadow-[0_20px_70px_rgba(0,0,0,0.35)]"
                             : "border-white/6 bg-white/[0.03] hover:border-white/10 hover:bg-white/[0.05]"
@@ -453,7 +483,7 @@
 
                                 {#if isCurrentTrack(track)}
                                     <div
-                                        class="absolute inset-0 bg-purple-500/18"
+                                        class="absolute inset-0 bg-blue-500/18"
                                     ></div>
                                     <div
                                         class="absolute bottom-2 left-2 right-2 rounded-full bg-black/40 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.18em] text-white/80 backdrop-blur-sm"
@@ -505,55 +535,118 @@
                             </div>
                         </button>
 
-                        <div
-                            class="flex shrink-0 flex-col justify-between gap-2"
-                        >
+                        <div class="relative flex shrink-0 items-start">
+                            {#if openMenuTrackId === track.id}
+                                <button
+                                    type="button"
+                                    class="fixed inset-0 z-10 cursor-default"
+                                    onclick={closeTrackMenu}
+                                    aria-label="Cerrar menú de acciones"
+                                ></button>
+                            {/if}
+
                             <button
                                 type="button"
-                                class="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/6 text-white/45 transition-colors hover:bg-white/12 hover:text-white"
-                                onclick={() => openMetadata(track)}
-                                aria-label={`Editar metadatos de ${track.title}`}
+                                class={`relative z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border transition-colors ${
+                                    openMenuTrackId === track.id
+                                        ? "border-blue-400/40 bg-blue-500/16 text-blue-100"
+                                        : "border-white/8 bg-white/6 text-white/45 hover:bg-white/12 hover:text-white"
+                                }`}
+                                onclick={(event) => {
+                                    event.stopPropagation();
+                                    toggleTrackMenu(track.id);
+                                }}
+                                aria-label={`Abrir acciones de ${track.title}`}
+                                aria-haspopup="menu"
+                                aria-expanded={openMenuTrackId === track.id}
+                                aria-controls={`track-actions-${track.id}`}
                             >
                                 <svg
                                     xmlns="http://www.w3.org/2000/svg"
                                     class="h-4 w-4"
-                                    viewBox="0 0 20 20"
-                                    fill="currentColor"
+                                    viewBox="0 0 24 24"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    stroke-width="2"
                                 >
                                     <path
-                                        fill-rule="evenodd"
-                                        d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
-                                        clip-rule="evenodd"
+                                        stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        d="M12 5h.01M12 12h.01M12 19h.01"
                                     />
                                 </svg>
                             </button>
 
-                            <button
-                                type="button"
-                                class="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-white/6 text-white/38 transition-colors hover:bg-rose-500/14 hover:text-rose-300"
-                                onclick={() => requestDelete(track)}
-                                aria-label={`Eliminar ${track.title}`}
-                                disabled={isDeleting === track.id}
-                            >
-                                {#if isDeleting === track.id}
-                                    <span
-                                        class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-                                    ></span>
-                                {:else}
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        class="h-4 w-4"
-                                        viewBox="0 0 20 20"
-                                        fill="currentColor"
+                            {#if openMenuTrackId === track.id}
+                                <div
+                                    id={`track-actions-${track.id}`}
+                                    class="absolute right-0 top-12 z-20 flex w-52 flex-col gap-1 rounded-[1.35rem] border border-white/10 bg-[#0d0d0d]/96 p-2 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur-xl"
+                                    role="menu"
+                                    aria-label={`Acciones para ${track.title}`}
+                                    tabindex="-1"
+                                >
+                                    <button
+                                        type="button"
+                                        class="inline-flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left text-sm font-medium text-white/82 transition-colors hover:bg-blue-500/14 hover:text-white"
+                                        onclick={() => openMetadata(track)}
+                                        role="menuitem"
                                     >
-                                        <path
-                                            fill-rule="evenodd"
-                                            d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                                            clip-rule="evenodd"
-                                        />
-                                    </svg>
-                                {/if}
-                            </button>
+                                        <span
+                                            class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/14 text-blue-100"
+                                        >
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                class="h-4 w-4"
+                                                viewBox="0 0 20 20"
+                                                fill="currentColor"
+                                            >
+                                                <path
+                                                    fill-rule="evenodd"
+                                                    d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z"
+                                                    clip-rule="evenodd"
+                                                />
+                                            </svg>
+                                        </span>
+                                        <span class="min-w-0">
+                                            Buscar metadata
+                                        </span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        class="inline-flex w-full items-center gap-3 rounded-[1rem] px-3 py-3 text-left text-sm font-medium text-white/82 transition-colors hover:bg-rose-500/14 hover:text-white"
+                                        onclick={() => requestDelete(track)}
+                                        role="menuitem"
+                                        disabled={isDeleting === track.id}
+                                    >
+                                        <span
+                                            class="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/12 text-rose-200"
+                                        >
+                                            {#if isDeleting === track.id}
+                                                <span
+                                                    class="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+                                                ></span>
+                                            {:else}
+                                                <svg
+                                                    xmlns="http://www.w3.org/2000/svg"
+                                                    class="h-4 w-4"
+                                                    viewBox="0 0 20 20"
+                                                    fill="currentColor"
+                                                >
+                                                    <path
+                                                        fill-rule="evenodd"
+                                                        d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                                                        clip-rule="evenodd"
+                                                    />
+                                                </svg>
+                                            {/if}
+                                        </span>
+                                        <span class="min-w-0">
+                                            Eliminar track
+                                        </span>
+                                    </button>
+                                </div>
+                            {/if}
                         </div>
                     </div>
                 </article>
