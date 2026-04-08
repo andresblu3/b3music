@@ -21,6 +21,7 @@ class TrackFactory extends Factory
             'youtube_id' => fake()->unique()->regexify('[A-Za-z0-9_-]{11}'),
             'title' => fake()->sentence(3),
             'artist' => fake()->name(),
+            'album' => fake()->sentence(2),
             'local_audio_path' => 'audio/'.fake()->uuid().'.mp3',
             'local_cover_path' => 'covers/'.fake()->uuid().'.jpg',
             'duration' => fake()->numberBetween(120, 420),

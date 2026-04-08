@@ -2,6 +2,7 @@ import WaveSurfer from 'wavesurfer.js';
 import { showToast } from './toast.svelte.js';
 
 const isAndroid = typeof window !== 'undefined' && !!window.AndroidBridge;
+const sessionKey = 'playerSession';
 
 let ws = null;
 let fallbackAudio = null;
@@ -26,21 +27,13 @@ export const playerState = $state({
     hasWaveform: false,
     shuffle: false,
     repeat: 'off',
+    queueLength: 0,
+    queuePosition: 0,
+    error: null,
 });
 
-// Restore player state after full page reload (Android WebView can cause these)
 if (isAndroid && typeof sessionStorage !== 'undefined') {
-    try {
-        const isNativePlaying = window.AndroidBridge?.isPlaying();
-        const saved = sessionStorage.getItem('playerTrack');
-        if (isNativePlaying && saved) {
-            const track = JSON.parse(saved);
-            playerState.currentTrack = track;
-            playerState.isPlaying = true;
-            playerState.duration = track.duration || 0;
-            startNativePolling(track);
-        }
-    } catch { /* silent */ }
+    restorePlayerSession();
 }
 
 export function getCachedDuration(trackId) {
@@ -57,21 +50,11 @@ export function updateCurrentTrackMetadata(updatedTrack) {
             ...playerState.currentTrack,
             title: updatedTrack.title,
             artist: updatedTrack.artist,
+            album: updatedTrack.album,
             local_cover_path: updatedTrack.local_cover_path,
             remote_cover_url: updatedTrack.remote_cover_url,
             coverVersion: Date.now(),
         };
-        // Also update sessionStorage for recovery
-        try {
-            sessionStorage.setItem('playerTrack', JSON.stringify({
-                id: playerState.currentTrack.id,
-                title: updatedTrack.title,
-                artist: updatedTrack.artist,
-                duration: playerState.currentTrack.duration,
-                local_audio_path: playerState.currentTrack.local_audio_path,
-                local_cover_path: updatedTrack.local_cover_path || null,
-            }));
-        } catch { /* silent */ }
     }
 
     // Also update the track in the queue
@@ -79,6 +62,8 @@ export function updateCurrentTrackMetadata(updatedTrack) {
     if (queueIdx !== -1) {
         queue[queueIdx] = { ...queue[queueIdx], ...updatedTrack };
     }
+
+    persistPlayerSession();
 }
 
 export function setContainer(el) {
@@ -114,6 +99,76 @@ function resolveIndex(idx) {
     return idx;
 }
 
+function syncQueueState() {
+    playerState.queueLength = queue.length;
+    playerState.queuePosition = currentIndex >= 0 && queue.length > 0 ? currentIndex + 1 : 0;
+}
+
+function getSerializableTrack(track) {
+    if (!track) {
+        return null;
+    }
+
+    return {
+        ...track,
+        coverVersion: track.coverVersion ?? null,
+    };
+}
+
+function persistPlayerSession() {
+    if (!isAndroid || typeof sessionStorage === 'undefined') {
+        return;
+    }
+
+    if (!playerState.currentTrack && queue.length === 0) {
+        sessionStorage.removeItem(sessionKey);
+        return;
+    }
+
+    syncQueueState();
+
+    sessionStorage.setItem(sessionKey, JSON.stringify({
+        queue: queue.map(getSerializableTrack),
+        shuffledIndices,
+        currentIndex,
+        player: {
+            currentTrack: getSerializableTrack(playerState.currentTrack),
+            duration: playerState.duration,
+            shuffle: playerState.shuffle,
+            repeat: playerState.repeat,
+        },
+    }));
+}
+
+function restorePlayerSession() {
+    try {
+        const saved = sessionStorage.getItem(sessionKey);
+
+        if (!saved) {
+            return;
+        }
+
+        const session = JSON.parse(saved);
+        queue = Array.isArray(session.queue) ? session.queue : [];
+        shuffledIndices = Array.isArray(session.shuffledIndices) ? session.shuffledIndices : [];
+        currentIndex = Number.isInteger(session.currentIndex) ? session.currentIndex : -1;
+        playerState.shuffle = !!session.player?.shuffle;
+        playerState.repeat = ['off', 'all', 'one'].includes(session.player?.repeat)
+            ? session.player.repeat
+            : 'off';
+        playerState.currentTrack = session.player?.currentTrack ?? null;
+        playerState.duration = session.player?.duration ?? playerState.currentTrack?.duration ?? 0;
+        playerState.isPlaying = !!window.AndroidBridge?.isPlaying();
+        syncQueueState();
+
+        if (playerState.currentTrack) {
+            startNativePolling(playerState.currentTrack);
+        }
+    } catch {
+        sessionStorage.removeItem(sessionKey);
+    }
+}
+
 // --- Public API ---
 
 export function setQueue(tracks, startIndex) {
@@ -127,11 +182,14 @@ export function setQueue(tracks, startIndex) {
         currentIndex = 0;
     }
 
+    syncQueueState();
     playTrack(queue[resolveIndex(currentIndex)]);
 }
 
 export function playNext() {
-    if (queue.length === 0) return;
+    if (queue.length === 0) {
+        return;
+    }
 
     // Repeat one: restart current track
     if (playerState.repeat === 'one') {
@@ -153,18 +211,24 @@ export function playNext() {
             if (playerState.shuffle) {
                 shuffledIndices = generateShuffledIndices(queue.length, resolveIndex(currentIndex));
             }
+
             currentIndex = 0;
         } else {
             // End of queue, no repeat — stop
             playerState.isPlaying = false;
             playerState.progress = 0;
-            if (ws) ws.setTime(0);
+            if (ws) {
+                ws.setTime(0);
+            }
+
+            persistPlayerSession();
             return;
         }
     } else {
         currentIndex = nextIdx;
     }
 
+    syncQueueState();
     playTrack(queue[resolveIndex(currentIndex)]);
 }
 
@@ -190,22 +254,26 @@ export function playPrev() {
         currentIndex = prevIdx;
     }
 
+    syncQueueState();
     playTrack(queue[resolveIndex(currentIndex)]);
 }
 
 export function toggleShuffle() {
-    playerState.shuffle = !playerState.shuffle;
+    const nextShuffle = !playerState.shuffle;
 
-    if (playerState.shuffle && queue.length > 0) {
-        const realIndex = resolveIndex(currentIndex);
+    if (nextShuffle && queue.length > 0) {
+        const realIndex = currentIndex >= 0 ? currentIndex : 0;
         shuffledIndices = generateShuffledIndices(queue.length, realIndex);
         currentIndex = 0; // Current track pinned at 0
-    } else if (!playerState.shuffle && queue.length > 0) {
-        // Restore real index
-        const realIndex = resolveIndex(currentIndex);
+    } else if (playerState.shuffle && queue.length > 0) {
+        const realIndex = shuffledIndices[currentIndex] ?? currentIndex;
         currentIndex = realIndex;
         shuffledIndices = [];
     }
+
+    playerState.shuffle = nextShuffle;
+    syncQueueState();
+    persistPlayerSession();
 
     showToast(
         playerState.shuffle ? 'Aleatorio activado' : 'Aleatorio desactivado',
@@ -217,6 +285,7 @@ export function toggleRepeat() {
     const modes = ['off', 'all', 'one'];
     const next = modes[(modes.indexOf(playerState.repeat) + 1) % modes.length];
     playerState.repeat = next;
+    persistPlayerSession();
 
     const labels = { off: 'Repetir desactivado', all: 'Repetir todo', one: 'Repetir una' };
     const icons = { off: null, all: '🔁', one: '🔂' };
@@ -224,7 +293,6 @@ export function toggleRepeat() {
 }
 
 export function playTrack(track) {
-    console.log("▶️ playTrack called with track:", track.id);
     destroy();
 
     playerState.currentTrack = track;
@@ -233,30 +301,27 @@ export function playTrack(track) {
     playerState.progress = 0;
     playerState.duration = track.duration || 0;
     playerState.hasWaveform = false;
-
-    // Persist for recovery after full page reloads
-    try {
-        sessionStorage.setItem('playerTrack', JSON.stringify({
-            id: track.id, title: track.title, artist: track.artist,
-            duration: track.duration, local_audio_path: track.local_audio_path,
-            local_cover_path: track.local_cover_path || null,
-        }));
-    } catch { /* silent */ }
+    playerState.error = null;
+    syncQueueState();
+    persistPlayerSession();
 
     // 1. Kick off audio playback
     if (isAndroid) {
         if (!track.local_audio_path) {
-            console.error("Track has no local_audio_path, cannot play on Android");
+            playerState.error = 'No se encontro el archivo de audio.';
             playerState.isLoading = false;
+            showToast(playerState.error);
             return;
         }
-        console.log("🌉 AndroidBridge detected, playing from file:", track.local_audio_path);
         window.AndroidBridge.playAudio(track.local_audio_path);
         playerState.isLoading = false;
         startNativePolling(track);
     } else {
         fallbackAudio = new Audio(`/tracks/${track.id}/stream`);
-        fallbackAudio.play().catch(e => console.warn("Fallback play blocked", e));
+        fallbackAudio.play().catch(() => {
+            playerState.error = 'No se pudo iniciar la reproduccion.';
+            showToast(playerState.error);
+        });
         attachFallbackListeners(fallbackAudio, track);
     }
 
@@ -373,9 +438,16 @@ function attachFallbackListeners(audio, track) {
         }
     });
     audio.addEventListener('timeupdate', () => { playerState.progress = audio.currentTime; });
-    audio.addEventListener('play', () => { playerState.isPlaying = true; });
+    audio.addEventListener('play', () => {
+        playerState.isPlaying = true;
+        playerState.error = null;
+    });
     audio.addEventListener('pause', () => { playerState.isPlaying = false; });
     audio.addEventListener('ended', () => { playNext(); });
+    audio.addEventListener('error', () => {
+        playerState.error = 'No se pudo cargar este archivo.';
+        showToast(playerState.error);
+    });
 }
 
 function setupNativeListeners() {
@@ -404,6 +476,8 @@ export function togglePlay() {
             fallbackAudio.pause();
         }
     }
+
+    persistPlayerSession();
 }
 
 export function seek(time) {
@@ -443,11 +517,20 @@ function destroy() {
 
 export function destroyPlayer() {
     destroy();
+    queue = [];
+    shuffledIndices = [];
+    currentIndex = -1;
     playerState.currentTrack = null;
     playerState.isPlaying = false;
     playerState.progress = 0;
     playerState.duration = 0;
-    try { sessionStorage.removeItem('playerTrack'); } catch { /* silent */ }
+    playerState.error = null;
+    syncQueueState();
+    try {
+        sessionStorage.removeItem(sessionKey);
+    } catch {
+        // Silent
+    }
 }
 
 async function persistDuration(trackId, seconds) {

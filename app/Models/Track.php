@@ -18,6 +18,7 @@ class Track extends Model
         'youtube_id',
         'title',
         'artist',
+        'album',
         'local_audio_path',
         'local_cover_path',
         'remote_cover_url',

@@ -86,7 +86,8 @@ class AudioBrowserController extends Controller
             Track::create([
                 'youtube_id' => $trackId,
                 'title' => $metadata['title'] ?: pathinfo($filename, PATHINFO_FILENAME),
-                'artist' => $metadata['artist'] ?: 'Local Library',
+                'artist' => $metadata['artist'] ?: 'Local',
+                'album' => $metadata['album'],
                 'local_audio_path' => 'tracks/'.$safeName,
                 'local_cover_path' => $coverPath,
                 'duration' => $metadata['duration'],
@@ -97,9 +98,13 @@ class AudioBrowserController extends Controller
         }
 
         if ($count > 0) {
-            Dialog::toast("Imported {$count} track".($count > 1 ? 's' : '').'.');
+            Dialog::toast(
+                $count === 1
+                    ? 'Importada 1 canción.'
+                    : "Importadas {$count} canciones.",
+            );
         } else {
-            Dialog::toast('No new tracks to import.');
+            Dialog::toast('No hay canciones nuevas para importar.');
         }
 
         return redirect()->route('tracks.index');
@@ -114,11 +119,18 @@ class AudioBrowserController extends Controller
                 continue;
             }
 
-            $this->scanDirectory($directory, $files, 0);
+            $this->scanDirectory($directory, $files, 0, $directory);
         }
 
-        // Sort by filename
-        usort($files, fn ($a, $b) => strcasecmp($a['name'], $b['name']));
+        usort($files, function (array $a, array $b): int {
+            $folderComparison = strcasecmp($a['folder_label'], $b['folder_label']);
+
+            if ($folderComparison !== 0) {
+                return $folderComparison;
+            }
+
+            return strcasecmp($a['name'], $b['name']);
+        });
 
         return $files;
     }
@@ -128,6 +140,7 @@ class AudioBrowserController extends Controller
         $result = [
             'title' => null,
             'artist' => null,
+            'album' => null,
             'duration' => null,
             'cover_data' => null,
         ];
@@ -146,6 +159,7 @@ class AudioBrowserController extends Controller
                 if (isset($tags[$tagType])) {
                     $result['title'] = $result['title'] ?: ($tags[$tagType]['title'][0] ?? null);
                     $result['artist'] = $result['artist'] ?: ($tags[$tagType]['artist'][0] ?? null);
+                    $result['album'] = $result['album'] ?: ($tags[$tagType]['album'][0] ?? null);
                 }
             }
 
@@ -198,7 +212,7 @@ class AudioBrowserController extends Controller
         }
     }
 
-    private function scanDirectory(string $path, array &$files, int $depth): void
+    private function scanDirectory(string $path, array &$files, int $depth, string $scanRoot): void
     {
         // Limit recursion depth to avoid scanning too deep
         if ($depth > 3) {
@@ -218,7 +232,7 @@ class AudioBrowserController extends Controller
             $fullPath = $path.'/'.$entry;
 
             if (is_dir($fullPath)) {
-                $this->scanDirectory($fullPath, $files, $depth + 1);
+                $this->scanDirectory($fullPath, $files, $depth + 1, $scanRoot);
 
                 continue;
             }
@@ -230,6 +244,8 @@ class AudioBrowserController extends Controller
             }
 
             $size = @filesize($fullPath);
+            $folderPath = dirname($fullPath);
+            $folderLabel = $this->formatFolderLabel($folderPath, $scanRoot);
 
             $files[] = [
                 'name' => pathinfo($entry, PATHINFO_FILENAME),
@@ -238,7 +254,21 @@ class AudioBrowserController extends Controller
                 'extension' => $extension,
                 'size' => $size ?: 0,
                 'folder' => basename(dirname($fullPath)),
+                'folder_path' => $folderPath,
+                'folder_label' => $folderLabel,
             ];
         }
+    }
+
+    private function formatFolderLabel(string $folderPath, string $scanRoot): string
+    {
+        $relativePath = trim(str_replace($scanRoot, '', $folderPath), '/');
+        $rootLabel = basename($scanRoot);
+
+        if ($relativePath === '') {
+            return $rootLabel;
+        }
+
+        return $rootLabel.'/'.$relativePath;
     }
 }

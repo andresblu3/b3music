@@ -1,63 +1,241 @@
 <script>
-    import { router, Link } from "@inertiajs/svelte";
+    import { Link, router } from "@inertiajs/svelte";
     import { fade, fly } from "svelte/transition";
-    import { flip } from "svelte/animate";
-    import { onMount } from "svelte";
+    import { onDestroy, onMount } from "svelte";
 
     let { files, importedPaths } = $props();
 
+    const filterOptions = [
+        { id: "new", label: "Nuevos" },
+        { id: "all", label: "Todos" },
+        { id: "imported", label: "Importados" },
+    ];
+
     let isImporting = $state(false);
     let selectedPaths = $state([]);
-    let missingPermissions = $state(false);
+    let searchQuery = $state("");
+    let filterMode = $state("new");
+    let permissionState = $state("checking");
 
-    onMount(() => {
-        if (
-            window.AndroidBridge &&
-            typeof window.AndroidBridge.hasAudioPermissions === "function"
-        ) {
-            missingPermissions = !window.AndroidBridge.hasAudioPermissions();
+    let permissionPoll = null;
+    let permissionTimeout = null;
+
+    let importedPathSet = $derived.by(() => new Set(importedPaths));
+    let filesByPath = $derived.by(
+        () => new Map(files.map((file) => [file.path, file])),
+    );
+
+    let browserStats = $derived.by(() => {
+        const importedCount = files.filter((file) =>
+            importedPathSet.has(file.path),
+        ).length;
+        let importableBytes = 0;
+
+        for (const file of files) {
+            if (!importedPathSet.has(file.path)) {
+                importableBytes += file.size || 0;
+            }
         }
+
+        return {
+            total: files.length,
+            imported: importedCount,
+            fresh: files.length - importedCount,
+            importableBytes,
+        };
     });
 
-    function requestPermissions() {
-        if (window.AndroidBridge) {
-            window.AndroidBridge.requestAudioPermissions();
-            // Start polling for permission status
-            const poll = setInterval(() => {
-                if (window.AndroidBridge.hasAudioPermissions()) {
-                    clearInterval(poll);
-                    missingPermissions = false;
-                    // Reload data from Laravel so PHP's scanner can finally read the disk!
-                    router.reload({ only: ["files"] });
-                }
-            }, 1000);
+    let visibleFiles = $derived.by(() => {
+        const normalizedQuery = searchQuery.trim().toLowerCase();
+
+        return files.filter((file) => {
+            const imported = importedPathSet.has(file.path);
+
+            if (filterMode === "new" && imported) {
+                return false;
+            }
+
+            if (filterMode === "imported" && !imported) {
+                return false;
+            }
+
+            if (!normalizedQuery) {
+                return true;
+            }
+
+            return [
+                file.name,
+                file.extension,
+                file.folder_label,
+                file.folder_path,
+            ]
+                .filter(Boolean)
+                .join(" ")
+                .toLowerCase()
+                .includes(normalizedQuery);
+        });
+    });
+
+    let groupedFiles = $derived.by(() => {
+        const groups = new Map();
+
+        for (const file of visibleFiles) {
+            const key =
+                file.folder_label ||
+                file.folder_path ||
+                file.folder ||
+                "Sin carpeta";
+
+            if (!groups.has(key)) {
+                groups.set(key, []);
+            }
+
+            groups.get(key).push(file);
         }
+
+        return Array.from(groups.entries());
+    });
+
+    let selectionSummary = $derived.by(() => {
+        let size = 0;
+
+        for (const path of selectedPaths) {
+            size += filesByPath.get(path)?.size || 0;
+        }
+
+        return {
+            count: selectedPaths.length,
+            size,
+        };
+    });
+
+    onMount(() => {
+        resolvePermissionState();
+    });
+
+    onDestroy(() => {
+        clearPermissionTimers();
+    });
+
+    function clearPermissionTimers() {
+        if (permissionPoll) {
+            clearInterval(permissionPoll);
+            permissionPoll = null;
+        }
+
+        if (permissionTimeout) {
+            clearTimeout(permissionTimeout);
+            permissionTimeout = null;
+        }
+    }
+
+    function resolvePermissionState() {
+        if (
+            !window.AndroidBridge ||
+            typeof window.AndroidBridge.hasAudioPermissions !== "function"
+        ) {
+            permissionState = "granted";
+            return;
+        }
+
+        permissionState = window.AndroidBridge.hasAudioPermissions()
+            ? "granted"
+            : "missing";
+    }
+
+    function requestPermissions() {
+        if (
+            !window.AndroidBridge ||
+            typeof window.AndroidBridge.requestAudioPermissions !== "function"
+        ) {
+            permissionState = "granted";
+            return;
+        }
+
+        clearPermissionTimers();
+        permissionState = "requesting";
+        window.AndroidBridge.requestAudioPermissions();
+
+        permissionPoll = setInterval(() => {
+            if (window.AndroidBridge.hasAudioPermissions()) {
+                clearPermissionTimers();
+                permissionState = "granted";
+                router.reload({ only: ["files", "importedPaths"] });
+            }
+        }, 900);
+
+        permissionTimeout = setTimeout(() => {
+            if (permissionState !== "granted") {
+                clearPermissionTimers();
+                permissionState = "denied";
+            }
+        }, 15000);
     }
 
     function isImported(path) {
-        return importedPaths.includes(path);
+        return importedPathSet.has(path);
     }
 
     function toggleSelection(path) {
-        if (isImported(path)) return;
+        if (isImported(path)) {
+            return;
+        }
 
         if (selectedPaths.includes(path)) {
-            selectedPaths = selectedPaths.filter((p) => p !== path);
-        } else {
-            selectedPaths = [...selectedPaths, path];
+            selectedPaths = selectedPaths.filter(
+                (currentPath) => currentPath !== path,
+            );
+            return;
         }
+
+        selectedPaths = [...selectedPaths, path];
+    }
+
+    function selectVisibleImportables() {
+        const visibleImportablePaths = visibleFiles
+            .filter((file) => !isImported(file.path))
+            .map((file) => file.path);
+
+        if (visibleImportablePaths.length === 0) {
+            return;
+        }
+
+        const allVisibleSelected = visibleImportablePaths.every((path) =>
+            selectedPaths.includes(path),
+        );
+
+        if (allVisibleSelected) {
+            selectedPaths = selectedPaths.filter(
+                (path) => !visibleImportablePaths.includes(path),
+            );
+            return;
+        }
+
+        const nextSelection = new Set(selectedPaths);
+
+        for (const path of visibleImportablePaths) {
+            nextSelection.add(path);
+        }
+
+        selectedPaths = Array.from(nextSelection);
     }
 
     function formatSize(bytes) {
-        if (bytes === 0) return "0 B";
-        const k = 1024;
+        if (bytes === 0) {
+            return "0 B";
+        }
+
+        const unit = 1024;
         const sizes = ["B", "KB", "MB", "GB"];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+        const index = Math.floor(Math.log(bytes) / Math.log(unit));
+
+        return `${parseFloat((bytes / unit ** index).toFixed(2))} ${sizes[index]}`;
     }
 
     function importSelected() {
-        if (selectedPaths.length === 0 || isImporting) return;
+        if (selectedPaths.length === 0 || isImporting) {
+            return;
+        }
 
         isImporting = true;
 
@@ -65,6 +243,7 @@
             "/audio-browser/import",
             { paths: selectedPaths },
             {
+                preserveScroll: true,
                 onFinish: () => {
                     isImporting = false;
                     selectedPaths = [];
@@ -72,98 +251,68 @@
             },
         );
     }
-
-    function selectAll() {
-        const importableFiles = files.filter((f) => !isImported(f.path));
-
-        if (selectedPaths.length === importableFiles.length) {
-            selectedPaths = [];
-        } else {
-            selectedPaths = importableFiles.map((f) => f.path);
-        }
-    }
-
-    // Group files by folder for better organization
-    const groupedFiles = $derived(() => {
-        const groups = {};
-        for (const file of files) {
-            if (!groups[file.folder]) {
-                groups[file.folder] = [];
-            }
-            groups[file.folder].push(file);
-        }
-        return groups;
-    });
 </script>
 
-<div
-    class="flex h-screen flex-col bg-black overflow-hidden"
-    in:fade={{ duration: 300 }}
->
-    <!-- Header -->
-    <header
-        class="flex-none px-6 pt-10 pb-6 border-b border-white/5 bg-black/80 backdrop-blur-xl z-10 sticky top-0"
+<div class="px-6 pb-10 pt-10" in:fade={{ duration: 220 }}>
+    <section
+        class="rounded-[2rem] border border-white/8 bg-[radial-gradient(circle_at_top_left,rgba(168,85,247,0.18),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.07),rgba(255,255,255,0.02))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.35)]"
     >
-        <div class="flex items-center justify-between">
-            <div class="flex items-center gap-4">
-                <Link
-                    href="/"
-                    class="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-white hover:bg-white/10 active:scale-95 transition-all outline-none"
-                    aria-label="Back to Music"
+        <div class="flex items-start justify-between gap-4">
+            <div>
+                <p
+                    class="text-[11px] font-semibold uppercase tracking-[0.3em] text-white/35"
                 >
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="h-5 w-5"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2.5"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M15 19l-7-7 7-7"
-                        />
-                    </svg>
-                </Link>
-                <div>
-                    <h1 class="text-2xl font-bold tracking-tight text-white">
-                        Archivos del dispositivo
-                    </h1>
-                    <p class="text-xs text-white/40">
-                        {files.length} archivos encontrados
-                    </p>
-                </div>
+                    Importador
+                </p>
+                <h1
+                    class="mt-3 text-3xl font-black tracking-[-0.04em] text-white"
+                >
+                    Selecciona tu música del dispositivo
+                </h1>
+                <p class="mt-3 max-w-md text-sm leading-relaxed text-white/55">
+                    Revisa carpetas, filtra por estado y arma el lote antes de
+                    importar a la biblioteca.
+                </p>
             </div>
 
-            {#if files.length > 0}
-                <button
-                    type="button"
-                    onclick={selectAll}
-                    class="text-sm font-medium text-purple-400 hover:text-purple-300 transition-colors"
-                >
-                    Seleccionar todos
-                </button>
-            {/if}
-        </div>
-    </header>
-
-    <!-- Content -->
-    <div class="flex-1 overflow-y-auto px-6 py-4 pb-32">
-        {#if missingPermissions}
-            <div
-                class="flex h-full flex-col items-center justify-center text-center"
+            <Link
+                href="/"
+                class="inline-flex shrink-0 items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/15"
             >
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.4"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M15 19l-7-7 7-7"
+                    />
+                </svg>
+                Biblioteca
+            </Link>
+        </div>
+    </section>
+
+    {#if permissionState === "missing" || permissionState === "requesting" || permissionState === "denied"}
+        <div
+            class="mt-6 rounded-[2rem] border border-white/8 bg-white/[0.03] p-6"
+        >
+            <div class="flex items-start gap-4">
                 <div
-                    class="mb-4 rounded-full bg-purple-500/20 p-4 text-purple-400"
+                    class="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.4rem] bg-purple-500/12 text-purple-300"
                 >
                     <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        class="h-10 w-10"
+                        class="h-7 w-7"
                         viewBox="0 0 24 24"
                         fill="none"
                         stroke="currentColor"
-                        stroke-width="1.5"
+                        stroke-width="1.6"
                     >
                         <path
                             stroke-linecap="round"
@@ -172,52 +321,63 @@
                         />
                     </svg>
                 </div>
-                <h3 class="text-lg font-medium text-white">
-                    Permiso de Almacenamiento
-                </h3>
-                <p class="mt-2 text-sm text-white/40 max-w-xs">
-                    Para buscar tus canciones locales, Drip necesita permiso
-                    para leer los archivos multimedia de tu dispositivo.
-                </p>
-                <button
-                    onclick={requestPermissions}
-                    class="mt-6 rounded-full bg-white text-black px-6 py-2.5 font-medium hover:bg-gray-200 active:scale-95 transition-all"
-                >
-                    Conceder Acceso
-                </button>
-            </div>
-        {:else if files.length === 0}
-            <div
-                class="flex h-full flex-col items-center justify-center text-center"
-            >
-                <div class="mb-4 rounded-full bg-white/5 p-4 text-white/30">
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="h-10 w-10"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                    >
-                        <path
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
-                        />
-                    </svg>
+
+                <div class="min-w-0 flex-1">
+                    <h2 class="text-lg font-semibold text-white">
+                        {permissionState === "requesting"
+                            ? "Esperando permiso de lectura"
+                            : permissionState === "denied"
+                              ? "Permiso denegado o sin respuesta"
+                              : "Hace falta acceso a multimedia"}
+                    </h2>
+                    <p class="mt-2 text-sm leading-relaxed text-white/48">
+                        {permissionState === "requesting"
+                            ? "Si aceptas el diálogo del sistema, refrescaré la lista automáticamente."
+                            : permissionState === "denied"
+                              ? "No pude confirmar el permiso. Puedes volver a intentarlo o revisar los permisos del dispositivo si no apareció el diálogo."
+                              : "Para escanear canciones locales dentro del webview necesito permiso para leer los archivos multimedia del dispositivo."}
+                    </p>
+
+                    <div class="mt-5 flex flex-wrap gap-3">
+                        <button
+                            type="button"
+                            class="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-black transition-transform active:scale-[0.98] disabled:opacity-65"
+                            onclick={requestPermissions}
+                            disabled={permissionState === "requesting"}
+                        >
+                            {permissionState === "requesting"
+                                ? "Solicitando..."
+                                : "Conceder acceso"}
+                        </button>
+
+                        {#if permissionState === "denied"}
+                            <button
+                                type="button"
+                                class="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/6 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                                onclick={resolvePermissionState}
+                            >
+                                Volver a comprobar
+                            </button>
+                        {/if}
+                    </div>
                 </div>
-                <h3 class="text-lg font-medium text-white">
-                    No se encontraron archivos de audio
-                </h3>
-                <p class="mt-2 text-sm text-white/40 max-w-xs">
-                    No se encontraron archivos de audio en la carpeta de música.
-                </p>
             </div>
-        {:else}
-            {#each Object.entries(groupedFiles()) as [folder, folderFiles]}
-                <div class="mb-8 last:mb-0">
-                    <h2
-                        class="mb-4 flex items-center gap-2 text-sm font-medium text-white/50 sticky top-0 bg-black py-2 z-10"
+        </div>
+    {:else}
+        <section
+            class="mt-6 rounded-[1.8rem] border border-white/8 bg-white/[0.03] p-4"
+        >
+            <div class="flex flex-col gap-4">
+                <div class="relative">
+                    <input
+                        type="text"
+                        bind:value={searchQuery}
+                        placeholder="Buscar por nombre, extensión o carpeta..."
+                        class="w-full rounded-[1.35rem] border border-white/10 bg-black/20 py-3 pl-11 pr-4 text-sm text-white placeholder:text-white/28 outline-none transition-colors focus:border-white/20"
+                    />
+
+                    <div
+                        class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-white/28"
                     >
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -230,105 +390,209 @@
                             <path
                                 stroke-linecap="round"
                                 stroke-linejoin="round"
-                                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+                                d="M21 21l-4.35-4.35M10.5 18a7.5 7.5 0 100-15 7.5 7.5 0 000 15z"
                             />
                         </svg>
-                        {folder}
-                    </h2>
+                    </div>
+                </div>
 
-                    <div class="space-y-2">
-                        {#each folderFiles as file (file.path)}
-                            {@const imported = isImported(file.path)}
-                            {@const selected = selectedPaths.includes(
-                                file.path,
-                            )}
-
+                <div
+                    class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                >
+                    <div class="flex flex-wrap gap-2">
+                        {#each filterOptions as option}
                             <button
                                 type="button"
-                                class="w-full flex items-center justify-between rounded-xl border p-4 text-left transition-all outline-none"
-                                class:border-white_5={!selected && !imported}
-                                class:bg-white_5={!selected && !imported}
-                                class:hover:bg-white_10={!imported}
-                                class:border-purple-500_50={selected}
-                                class:bg-purple-500_10={selected}
-                                class:bg-transparent={imported}
-                                class:opacity-50={imported}
-                                class:cursor-not-allowed={imported}
-                                class:cursor-pointer={!imported}
-                                onclick={() => toggleSelection(file.path)}
-                                disabled={imported}
+                                class={`rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] transition-colors ${
+                                    filterMode === option.id
+                                        ? "bg-white text-black"
+                                        : "bg-white/6 text-white/45 hover:bg-white/10 hover:text-white/70"
+                                }`}
+                                onclick={() => {
+                                    filterMode = option.id;
+                                }}
                             >
-                                <div class="flex items-center gap-4 min-w-0">
-                                    <div
-                                        class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/70"
-                                    >
-                                        <svg
-                                            xmlns="http://www.w3.org/2000/svg"
-                                            class="h-5 w-5"
-                                            viewBox="0 0 24 24"
-                                            fill="currentColor"
-                                        >
-                                            <path
-                                                d="M9 18V5l12-2v13"
-                                                stroke="currentColor"
-                                                stroke-width="2"
-                                                stroke-linecap="round"
-                                                stroke-linejoin="round"
-                                            />
-                                            <circle
-                                                cx="6"
-                                                cy="18"
-                                                r="3"
-                                                fill="currentColor"
-                                            />
-                                            <circle
-                                                cx="18"
-                                                cy="16"
-                                                r="3"
-                                                fill="currentColor"
-                                            />
-                                        </svg>
-                                    </div>
-                                    <div class="min-w-0 pr-4">
-                                        <p
-                                            class="truncate font-medium text-white"
-                                            class:text-white_50={imported}
-                                        >
-                                            {file.name}
-                                        </p>
-                                        <p
-                                            class="mt-0.5 text-xs text-white/40 uppercase tracking-wider"
-                                        >
-                                            {file.extension} • {formatSize(
-                                                file.size,
-                                            )}
-                                            {#if imported}
-                                                <span
-                                                    class="ml-2 inline-flex items-center rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/70"
-                                                >
-                                                    Importado
-                                                </span>
-                                            {/if}
-                                        </p>
-                                    </div>
-                                </div>
+                                {option.label}
+                            </button>
+                        {/each}
+                    </div>
 
-                                <div class="flex-shrink-0">
+                    <button
+                        type="button"
+                        class="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/6 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/70 transition-colors hover:bg-white/10"
+                        onclick={selectVisibleImportables}
+                        disabled={visibleFiles.filter(
+                            (file) => !isImported(file.path),
+                        ).length === 0}
+                    >
+                        Seleccionar visibles
+                    </button>
+                </div>
+            </div>
+        </section>
+
+        {#if files.length === 0}
+            <div
+                class="mt-8 rounded-[2rem] border border-white/8 bg-white/[0.03] px-6 py-14 text-center"
+            >
+                <div
+                    class="mx-auto mb-4 flex h-[4.5rem] w-[4.5rem] items-center justify-center rounded-[1.6rem] bg-white/6 text-white/28"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-8 w-8"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.6"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"
+                        />
+                    </svg>
+                </div>
+                <h2 class="text-lg font-semibold text-white">
+                    No se encontraron archivos de audio.
+                </h2>
+                <p class="mt-2 text-sm text-white/45">
+                    Revisa que el dispositivo tenga música en las carpetas
+                    escaneadas o vuelve a comprobar los permisos.
+                </p>
+            </div>
+        {:else if visibleFiles.length === 0}
+            <div
+                class="mt-8 rounded-[2rem] border border-white/8 bg-white/[0.03] px-6 py-14 text-center"
+            >
+                <h2 class="text-lg font-semibold text-white">
+                    No hay resultados con los filtros actuales.
+                </h2>
+                <p class="mt-2 text-sm text-white/45">
+                    Cambia la búsqueda o el filtro para ver más archivos
+                    disponibles.
+                </p>
+            </div>
+        {:else}
+            <div class="mt-8 flex flex-col gap-6">
+                {#each groupedFiles as [folder, folderFiles]}
+                    <section in:fly={{ y: 18, opacity: 0, duration: 220 }}>
+                        <div
+                            class="mb-3 flex items-center justify-between gap-3"
+                        >
+                            <div>
+                                <p
+                                    class="text-xs font-semibold uppercase tracking-[0.22em] text-white/25"
+                                >
+                                    Carpeta
+                                </p>
+                                <h2
+                                    class="mt-1 text-sm font-semibold text-white/75"
+                                >
+                                    {folder}
+                                </h2>
+                            </div>
+
+                            <p class="text-xs text-white/30">
+                                {folderFiles.length} archivo{folderFiles.length ===
+                                1
+                                    ? ""
+                                    : "s"}
+                            </p>
+                        </div>
+
+                        <div class="space-y-2">
+                            {#each folderFiles as file (file.path)}
+                                {@const imported = isImported(file.path)}
+                                {@const selected = selectedPaths.includes(
+                                    file.path,
+                                )}
+
+                                <button
+                                    type="button"
+                                    class={`flex w-full items-center justify-between gap-4 rounded-[1.5rem] border px-4 py-4 text-left transition-colors ${
+                                        selected
+                                            ? "border-white/14 bg-white/[0.08]"
+                                            : imported
+                                              ? "border-white/6 bg-transparent opacity-55"
+                                              : "border-white/8 bg-white/[0.03] hover:bg-white/[0.06]"
+                                    }`}
+                                    onclick={() => toggleSelection(file.path)}
+                                    disabled={imported}
+                                >
                                     <div
-                                        class="flex h-6 w-6 items-center justify-center rounded-full border transition-colors"
-                                        class:border-white_20={!selected &&
-                                            !imported}
-                                        class:border-transparent={selected ||
-                                            imported}
-                                        class:bg-purple-500={selected}
-                                        class:bg-white_10={imported}
+                                        class="flex min-w-0 items-center gap-4"
                                     >
-                                        {#if selected || imported}
+                                        <div
+                                            class="flex h-12 w-12 shrink-0 items-center justify-center rounded-[1rem] bg-white/8 text-white/65"
+                                        >
+                                            <svg
+                                                xmlns="http://www.w3.org/2000/svg"
+                                                class="h-6 w-6"
+                                                viewBox="0 0 24 24"
+                                                fill="currentColor"
+                                            >
+                                                <path
+                                                    d="M9 18V5l12-2v13"
+                                                    stroke="currentColor"
+                                                    stroke-width="2"
+                                                    stroke-linecap="round"
+                                                    stroke-linejoin="round"
+                                                />
+                                                <circle
+                                                    cx="6"
+                                                    cy="18"
+                                                    r="3"
+                                                    fill="currentColor"
+                                                />
+                                                <circle
+                                                    cx="18"
+                                                    cy="16"
+                                                    r="3"
+                                                    fill="currentColor"
+                                                />
+                                            </svg>
+                                        </div>
+
+                                        <div class="min-w-0">
+                                            <p
+                                                class={`truncate text-sm font-semibold ${imported ? "text-white/55" : "text-white"}`}
+                                            >
+                                                {file.name}
+                                            </p>
+                                            <p
+                                                class="mt-1 truncate text-[11px] uppercase tracking-[0.16em] text-white/28"
+                                            >
+                                                {file.extension} • {formatSize(
+                                                    file.size,
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div
+                                        class="flex shrink-0 items-center gap-3"
+                                    >
+                                        {#if imported}
+                                            <span
+                                                class="rounded-full bg-white/8 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/55"
+                                            >
+                                                Importado
+                                            </span>
+                                        {/if}
+
+                                        <div
+                                            class={`flex h-7 w-7 items-center justify-center rounded-full border ${
+                                                selected
+                                                    ? "border-transparent bg-white text-black"
+                                                    : imported
+                                                      ? "border-transparent bg-white/8 text-white/45"
+                                                      : "border-white/16 bg-transparent text-transparent"
+                                            }`}
+                                        >
                                             <svg
                                                 xmlns="http://www.w3.org/2000/svg"
                                                 class="h-4 w-4"
-                                                class:text-white={selected}
-                                                class:text-white_50={imported}
                                                 viewBox="0 0 24 24"
                                                 fill="none"
                                                 stroke="currentColor"
@@ -340,66 +604,60 @@
                                                     d="M5 13l4 4L19 7"
                                                 />
                                             </svg>
-                                        {/if}
+                                        </div>
                                     </div>
-                                </div>
-                            </button>
-                        {/each}
-                    </div>
-                </div>
-            {/each}
+                                </button>
+                            {/each}
+                        </div>
+                    </section>
+                {/each}
+            </div>
         {/if}
-    </div>
-
-    <!-- Floating Action Bar -->
-    {#if selectedPaths.length > 0}
-        <div
-            class="absolute bottom-6 left-6 right-6 z-20"
-            in:fly={{ y: 20, duration: 300 }}
-            out:fade={{ duration: 200 }}
-        >
-            <button
-                type="button"
-                onclick={importSelected}
-                disabled={isImporting}
-                class="flex w-full items-center justify-between overflow-hidden rounded-2xl bg-purple-600 px-6 py-4 font-semibold text-white shadow-[0_8px_32px_rgba(168,85,247,0.4)] transition-all hover:bg-purple-500 active:scale-95 disabled:opacity-80 disabled:active:scale-100"
-            >
-                <div class="flex items-center gap-3">
-                    {#if isImporting}
-                        <div
-                            class="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white"
-                        ></div>
-                        <span>Importando...</span>
-                    {:else}
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            class="h-5 w-5"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2.5"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                            />
-                        </svg>
-                        <span
-                            >Importar {selectedPaths.length} Canción{selectedPaths.length ===
-                            1
-                                ? ""
-                                : "es"}</span
-                        >
-                    {/if}
-                </div>
-
-                <div
-                    class="flex h-8 min-w-[2rem] items-center justify-center rounded-lg bg-black/20 px-2 text-sm"
-                >
-                    Listo
-                </div>
-            </button>
-        </div>
     {/if}
 </div>
+
+{#if permissionState === "granted" && selectionSummary.count > 0}
+    <div
+        class="fixed inset-x-0 bottom-[max(env(safe-area-inset-bottom),0.75rem)] z-[55] px-4"
+        in:fly={{ y: 24, duration: 220 }}
+        out:fade={{ duration: 120 }}
+    >
+        <div
+            class="mx-auto max-w-md overflow-hidden rounded-[1.75rem] border border-white/10 bg-black/75 shadow-[0_18px_60px_rgba(0,0,0,0.4)] backdrop-blur-xl"
+        >
+            <div class="flex items-center justify-between gap-3 px-5 py-4">
+                <div>
+                    <p
+                        class="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/35"
+                    >
+                        Lote listo
+                    </p>
+                    <p class="mt-1 text-sm font-semibold text-white">
+                        {selectionSummary.count} canción{selectionSummary.count ===
+                        1
+                            ? ""
+                            : "es"} • {formatSize(selectionSummary.size)}
+                    </p>
+                </div>
+
+                <button
+                    type="button"
+                    class="inline-flex items-center justify-center rounded-[1.15rem] bg-white px-4 py-3 text-sm font-semibold text-black transition-transform active:scale-[0.98] disabled:opacity-65"
+                    onclick={importSelected}
+                    disabled={isImporting}
+                >
+                    {#if isImporting}
+                        <span class="inline-flex items-center gap-2">
+                            <span
+                                class="h-4 w-4 animate-spin rounded-full border-2 border-black/20 border-t-black"
+                            ></span>
+                            Importando...
+                        </span>
+                    {:else}
+                        Importar
+                    {/if}
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}

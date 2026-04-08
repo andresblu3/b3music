@@ -46,7 +46,8 @@ class TrackController extends Controller
             Track::create([
                 'youtube_id' => 'loc_'.uniqid('', true),
                 'title' => pathinfo($filename, PATHINFO_FILENAME),
-                'artist' => 'Local Library',
+                'artist' => 'Local',
+                'album' => null,
                 'local_audio_path' => $path,
                 'is_downloaded' => true,
                 'duration' => $duration > 0 ? $duration : null,
@@ -54,7 +55,11 @@ class TrackController extends Controller
             $count++;
         }
 
-        Dialog::toast("Successfully synced {$count} tracks.");
+        Dialog::toast(
+            $count === 1
+                ? 'Sincronizada 1 canción.'
+                : "Sincronizadas {$count} canciones.",
+        );
 
         return redirect()->back();
     }
@@ -72,7 +77,7 @@ class TrackController extends Controller
 
         $track->delete();
 
-        Dialog::toast('Track removed from library.');
+        Dialog::toast('Canción eliminada de la biblioteca.');
 
         return redirect()->back();
     }
@@ -143,15 +148,82 @@ class TrackController extends Controller
         $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'artist' => ['required', 'string', 'max:255'],
+            'album' => ['nullable', 'string', 'max:255'],
             'cover_url' => ['nullable', 'url', 'max:500'],
+            'cover_data' => ['nullable', 'string'],
         ]);
+
+        $localCoverPath = $this->storeCoverArt(
+            $track,
+            $request->string('cover_data')->toString(),
+        );
 
         $track->update([
             'title' => $request->input('title'),
             'artist' => $request->input('artist'),
+            'album' => $request->input('album'),
+            'local_cover_path' => $localCoverPath,
             'remote_cover_url' => $request->input('cover_url'),
         ]);
 
         return response()->json($track->fresh());
+    }
+
+    private function storeCoverArt(Track $track, string $coverData): ?string
+    {
+        if ($coverData === '') {
+            return $track->local_cover_path;
+        }
+
+        if (! preg_match('/^data:image\/[a-zA-Z0-9.+-]+;base64,(.+)$/', $coverData, $matches)) {
+            return $track->local_cover_path;
+        }
+
+        $decoded = base64_decode($matches[1], true);
+
+        if ($decoded === false) {
+            return $track->local_cover_path;
+        }
+
+        return $this->saveCoverArt(
+            $track->youtube_id ?: 'track_'.$track->id,
+            $decoded,
+        ) ?? $track->local_cover_path;
+    }
+
+    private function saveCoverArt(string $trackId, string $imageData): ?string
+    {
+        try {
+            $image = @imagecreatefromstring($imageData);
+
+            if ($image === false) {
+                return null;
+            }
+
+            $width = imagesx($image);
+            $height = imagesy($image);
+            $maxDimension = 600;
+
+            if ($width > $maxDimension || $height > $maxDimension) {
+                $ratio = min($maxDimension / $width, $maxDimension / $height);
+                $newWidth = (int) round($width * $ratio);
+                $newHeight = (int) round($height * $ratio);
+                $resized = imagecreatetruecolor($newWidth, $newHeight);
+                imagecopyresampled($resized, $image, 0, 0, 0, 0, $newWidth, $newHeight, $width, $height);
+                imagedestroy($image);
+                $image = $resized;
+            }
+
+            Storage::disk('public')->makeDirectory('covers');
+
+            $relativePath = 'covers/'.$trackId.'.jpg';
+            $fullPath = Storage::disk('public')->path($relativePath);
+            imagejpeg($image, $fullPath, 88);
+            imagedestroy($image);
+
+            return $relativePath;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

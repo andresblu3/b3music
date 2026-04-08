@@ -10,3 +10,38 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+
+:root {
+    color-scheme: dark;
+}
+
+html,
+body,
+#app {
+    min-height: 100%;
+    background: #050505;
+}
+
+body {
+    background-image:
+        radial-gradient(circle at top left, rgba(168, 85, 247, 0.08), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(255, 255, 255, 0.05), transparent 22%);
+}
+
+* {
+    scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
