@@ -3,12 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Track;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Inertia\Response as InertiaResponse;
 use Native\Mobile\Facades\Dialog;
-use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TrackController extends Controller
 {
@@ -37,14 +37,14 @@ class TrackController extends Controller
         foreach ($files as $index => $file) {
             $filename = $file->getClientOriginalName();
             $extension = $file->getClientOriginalExtension();
-            $safeName = uniqid() . '_' . preg_replace('/[^A-Za-z0-9_\-]/', '_', pathinfo($filename, PATHINFO_FILENAME)) . '.' . $extension;
-            
+            $safeName = uniqid().'_'.preg_replace('/[^A-Za-z0-9_\-]/', '_', pathinfo($filename, PATHINFO_FILENAME)).'.'.$extension;
+
             $path = $file->storeAs('tracks', $safeName, 'local');
 
             $duration = isset($durations[$index]) ? (int) $durations[$index] : 0;
 
             Track::create([
-                'youtube_id' => 'loc_' . uniqid('', true),
+                'youtube_id' => 'loc_'.uniqid('', true),
                 'title' => pathinfo($filename, PATHINFO_FILENAME),
                 'artist' => 'Local Library',
                 'local_audio_path' => $path,
@@ -63,11 +63,16 @@ class TrackController extends Controller
     {
         if ($track->local_audio_path) {
             Storage::disk('local')->delete($track->local_audio_path);
+            Storage::disk('public')->delete($track->local_audio_path);
         }
-        
+
+        if ($track->local_cover_path) {
+            Storage::disk('public')->delete($track->local_cover_path);
+        }
+
         $track->delete();
 
-        Dialog::toast("Track removed from library.");
+        Dialog::toast('Track removed from library.');
 
         return redirect()->back();
     }
@@ -83,6 +88,24 @@ class TrackController extends Controller
         return response()->noContent();
     }
 
+    public function streamCover(Track $track)
+    {
+        if (! $track->local_cover_path) {
+            abort(404, 'No cover art available.');
+        }
+
+        $filePath = Storage::disk('public')->path($track->local_cover_path);
+
+        if (! file_exists($filePath)) {
+            abort(404, 'Cover art file not found.');
+        }
+
+        return response()->file($filePath, [
+            'Content-Type' => 'image/jpeg',
+            'Cache-Control' => 'public, max-age=86400',
+        ]);
+    }
+
     public function streamAudio(Track $track)
     {
         $filePath = Storage::disk('public')->path($track->local_audio_path);
@@ -96,7 +119,7 @@ class TrackController extends Controller
         }
 
         $extension = strtolower(pathinfo($filePath, PATHINFO_EXTENSION));
-        
+
         $mimeType = match ($extension) {
             'mp3' => 'audio/mpeg',
             'm4a' => 'audio/mp4',
@@ -113,5 +136,22 @@ class TrackController extends Controller
             'Content-Type' => $mimeType,
             'Cache-Control' => 'no-cache, must-revalidate',
         ]);
+    }
+
+    public function applyMetadata(Request $request, Track $track): JsonResponse
+    {
+        $request->validate([
+            'title' => ['required', 'string', 'max:255'],
+            'artist' => ['required', 'string', 'max:255'],
+            'cover_url' => ['nullable', 'url', 'max:500'],
+        ]);
+
+        $track->update([
+            'title' => $request->input('title'),
+            'artist' => $request->input('artist'),
+            'remote_cover_url' => $request->input('cover_url'),
+        ]);
+
+        return response()->json($track->fresh());
     }
 }

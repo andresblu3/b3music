@@ -1,11 +1,48 @@
 <script>
-    import { playTrack, playerState as player, getCachedDuration } from "../../Stores/player.svelte.js";
-    import { router } from "@inertiajs/svelte";
+    import {
+        setQueue,
+        playerState as player,
+        getCachedDuration,
+        updateCurrentTrackMetadata,
+    } from "../../Stores/player.svelte.js";
+    import { router, Link } from "@inertiajs/svelte";
     import { fade, fly } from "svelte/transition";
     import { flip } from "svelte/animate";
+    import MetadataModal from "../../Components/MetadataModal.svelte";
 
     let { tracks } = $props();
     let isDeleting = $state(null); // Track ID being deleted
+    let showMetadataModal = $state(false);
+    let selectedTrackForMetadata = $state(null);
+    let coverVersions = $state({}); // Cache-busting for cover images after metadata update
+
+    function openMetadata(track) {
+        selectedTrackForMetadata = track;
+        showMetadataModal = true;
+    }
+
+    function closeMetadataModal() {
+        showMetadataModal = false;
+        selectedTrackForMetadata = null;
+    }
+
+    function handleMetadataApplied(updatedTrack) {
+        // Update the track in the local tracks array (reactive)
+        const idx = tracks.findIndex(t => t.id === updatedTrack.id);
+        if (idx !== -1) {
+            tracks[idx] = updatedTrack;
+        }
+
+        // Bump cover version to bust browser cache for this track's cover image
+        if (updatedTrack.local_cover_path) {
+            coverVersions = { ...coverVersions, [updatedTrack.id]: Date.now() };
+        }
+
+        // Sync the player store if this track is currently playing
+        if (player.currentTrack?.id === updatedTrack.id) {
+            updateCurrentTrackMetadata(updatedTrack);
+        }
+    }
 
     function formatDuration(seconds) {
         if (!seconds) return "--:--";
@@ -56,7 +93,7 @@
             </div>
         </div>
 
-        <a
+        <Link
             href="/audio-browser"
             class="group relative flex h-14 w-14 cursor-pointer items-center justify-center overflow-hidden rounded-2xl bg-white/5 border border-white/5 text-white transition-all hover:bg-white/10 active:scale-90 shadow-2xl"
             aria-label="Import from device audio"
@@ -75,7 +112,7 @@
                     d="M12 4.5v15m7.5-7.5h-15"
                 />
             </svg>
-        </a>
+        </Link>
     </header>
 
     {#if tracks.length === 0}
@@ -135,11 +172,11 @@
                             )
                                 ? 'bg-white/[0.08] border-white/[0.08] shadow-[0_15px_40px_rgba(0,0,0,0.4)] backdrop-blur-md'
                                 : 'hover:bg-white/[0.04] active:scale-[0.97]'}"
-                            onclick={() => playTrack(track)}
+                            onclick={() => setQueue(tracks, i)}
                             onkeydown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") {
                                     e.preventDefault();
-                                    playTrack(track);
+                                    setQueue(tracks, i);
                                 }
                             }}
                         >
@@ -147,24 +184,38 @@
                             <div
                                 class="relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]"
                             >
-                                <div
-                                    class="flex h-full w-full items-center justify-center text-white/30 transition-transform duration-500 group-hover:scale-110"
-                                >
-                                    <svg
-                                        xmlns="http://www.w3.org/2000/svg"
-                                        class="h-8 w-8"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                        stroke-width="1.5"
+                                {#if track.local_cover_path}
+                                    <img
+                                        src="/tracks/{track.id}/cover{coverVersions[track.id] ? `?v=${coverVersions[track.id]}` : ''}"
+                                        alt=""
+                                        class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                    />
+                                {:else if track.remote_cover_url}
+                                    <img
+                                        src={track.remote_cover_url}
+                                        alt=""
+                                        class="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                                    />
+                                {:else}
+                                    <div
+                                        class="flex h-full w-full items-center justify-center text-white/30 transition-transform duration-500 group-hover:scale-110"
                                     >
-                                        <path
-                                            stroke-linecap="round"
-                                            stroke-linejoin="round"
-                                            d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
-                                        />
-                                    </svg>
-                                </div>
+                                        <svg
+                                            xmlns="http://www.w3.org/2000/svg"
+                                            class="h-8 w-8"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke="currentColor"
+                                            stroke-width="1.5"
+                                        >
+                                            <path
+                                                stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3"
+                                            />
+                                        </svg>
+                                    </div>
+                                {/if}
 
                                 {#if isCurrentTrack(track)}
                                     <div
@@ -213,16 +264,31 @@
                                 >
                                     {formatDuration(getTrackDuration(track))}
                                 </span>
+                                
+                                <div class="flex items-center gap-1">
+                                    <button
+                                        type="button"
+                                        class="p-2 text-white/30 hover:text-purple-400 active:scale-90 transition-colors"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            openMetadata(track);
+                                        }}
+                                        aria-label="Search Metadata"
+                                    >
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                                            <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
+                                        </svg>
+                                    </button>
 
-                                <button
-                                    type="button"
-                                    class="p-2 text-white/40 hover:text-red-400 active:scale-90 transition-colors"
-                                    onclick={(e) => {
-                                        e.stopPropagation();
-                                        deleteTrack(track);
-                                    }}
-                                    aria-label="Delete track"
-                                >
+                                    <button
+                                        type="button"
+                                        class="p-2 text-white/40 hover:text-red-400 active:scale-90 transition-colors"
+                                        onclick={(e) => {
+                                            e.stopPropagation();
+                                            deleteTrack(track);
+                                        }}
+                                        aria-label="Delete track"
+                                    >
                                     {#if isDeleting === track.id}
                                         <div
                                             class="h-4 w-4 animate-spin rounded-full border-2 border-red-400 border-t-transparent"
@@ -241,7 +307,8 @@
                                             />
                                         </svg>
                                     {/if}
-                                </button>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -250,3 +317,10 @@
         </div>
     {/if}
 </div>
+
+<MetadataModal
+    show={showMetadataModal}
+    track={selectedTrackForMetadata}
+    onClose={closeMetadataModal}
+    onApplied={handleMetadataApplied}
+/>

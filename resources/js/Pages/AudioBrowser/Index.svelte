@@ -1,5 +1,5 @@
 <script>
-    import { router } from "@inertiajs/svelte";
+    import { router, Link } from "@inertiajs/svelte";
     import { fade, fly } from "svelte/transition";
     import { flip } from "svelte/animate";
     import { onMount } from "svelte";
@@ -11,7 +11,10 @@
     let missingPermissions = $state(false);
 
     onMount(() => {
-        if (window.AndroidBridge && typeof window.AndroidBridge.hasAudioPermissions === 'function') {
+        if (
+            window.AndroidBridge &&
+            typeof window.AndroidBridge.hasAudioPermissions === "function"
+        ) {
             missingPermissions = !window.AndroidBridge.hasAudioPermissions();
         }
     });
@@ -25,7 +28,7 @@
                     clearInterval(poll);
                     missingPermissions = false;
                     // Reload data from Laravel so PHP's scanner can finally read the disk!
-                    router.reload({ only: ['files'] });
+                    router.reload({ only: ["files"] });
                 }
             }, 1000);
         }
@@ -103,7 +106,7 @@
     >
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-4">
-                <a
+                <Link
                     href="/"
                     class="flex h-10 w-10 items-center justify-center rounded-full bg-white/5 text-white hover:bg-white/10 active:scale-95 transition-all outline-none"
                     aria-label="Back to Music"
@@ -122,7 +125,7 @@
                             d="M15 19l-7-7 7-7"
                         />
                     </svg>
-                </a>
+                </Link>
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight text-white">
                         Archivos del dispositivo
@@ -151,18 +154,35 @@
             <div
                 class="flex h-full flex-col items-center justify-center text-center"
             >
-                <div class="mb-4 rounded-full bg-purple-500/20 p-4 text-purple-400">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                <div
+                    class="mb-4 rounded-full bg-purple-500/20 p-4 text-purple-400"
+                >
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-10 w-10"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                        />
                     </svg>
                 </div>
                 <h3 class="text-lg font-medium text-white">
                     Permiso de Almacenamiento
                 </h3>
                 <p class="mt-2 text-sm text-white/40 max-w-xs">
-                    Para buscar tus canciones locales, Drip necesita permiso para leer los archivos multimedia de tu dispositivo.
+                    Para buscar tus canciones locales, Drip necesita permiso
+                    para leer los archivos multimedia de tu dispositivo.
                 </p>
-                <button onclick={requestPermissions} class="mt-6 rounded-full bg-white text-black px-6 py-2.5 font-medium hover:bg-gray-200 active:scale-95 transition-all">
+                <button
+                    onclick={requestPermissions}
+                    class="mt-6 rounded-full bg-white text-black px-6 py-2.5 font-medium hover:bg-gray-200 active:scale-95 transition-all"
+                >
                     Conceder Acceso
                 </button>
             </div>
@@ -366,10 +386,10 @@
                             />
                         </svg>
                         <span
-                            >Import {selectedPaths.length} Track{selectedPaths.length ===
+                            >Importar {selectedPaths.length} Canción{selectedPaths.length ===
                             1
                                 ? ""
-                                : "s"}</span
+                                : "es"}</span
                         >
                     {/if}
                 </div>

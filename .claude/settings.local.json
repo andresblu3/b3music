@@ -6,7 +6,8 @@
       "mcp__laravel-boost__search-docs",
       "Bash(npm install:*)",
       "Bash(php artisan:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "WebFetch(domain:inertiajs.com)"
     ]
   },
   "enableAllProjectMcpServers": true,

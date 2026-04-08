@@ -2,12 +2,13 @@
 
 namespace App\Models;
 
+use Database\Factories\TrackFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Track extends Model
 {
-    /** @use HasFactory<\Database\Factories\TrackFactory> */
+    /** @use HasFactory<TrackFactory> */
     use HasFactory;
 
     /**
@@ -19,6 +20,7 @@ class Track extends Model
         'artist',
         'local_audio_path',
         'local_cover_path',
+        'remote_cover_url',
         'duration',
         'is_downloaded',
         'source_path',
